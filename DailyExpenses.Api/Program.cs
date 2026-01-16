@@ -43,6 +43,15 @@ if (string.IsNullOrWhiteSpace(jwtSecret))
         "Secret must be at least 256 bits (32 characters).");
 }
 
+if (jwtSecret.Length < 32)
+{
+    throw new InvalidOperationException(
+        $"JWT Secret is too short ({jwtSecret.Length} characters). " +
+        "Secret must be at least 256 bits (32 characters) for HS256 algorithm. " +
+        $"Current secret length: {jwtSecret.Length} chars. Required: 32+ chars. " +
+        "Example: Set environment variable 'Jwt__Secret' with a 32+ character random string.");
+}
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 if (string.IsNullOrWhiteSpace(jwtIssuer))
 {
@@ -103,10 +112,14 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 });
 app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
-    Predicate = _ => false // Liveness check - just returns if app is running
+    Predicate = _ => false // Liveness check - no health checks run, just returns OK if app is responsive
 });
 
-// WeatherForecast demo endpoint
+// ========================================
+// DEMO ENDPOINT (from .NET template)
+// TODO: Remove before production deployment
+// This endpoint is for testing API functionality during Story 1.2 initialization only
+// ========================================
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -117,7 +130,7 @@ app.MapGet("/weatherforecast", () =>
     var forecast =  Enumerable.Range(1, WeatherForecastConstants.ForecastDays).Select(index =>
         new WeatherForecast
         (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+            DateOnly.FromDateTime(DateTime.UtcNow.AddDays(index)),
             Random.Shared.Next(WeatherForecastConstants.MinTemperatureC, WeatherForecastConstants.MaxTemperatureC),
             summaries[Random.Shared.Next(summaries.Length)]
         ))
@@ -135,11 +148,14 @@ static class WeatherForecastConstants
     public const int MinTemperatureC = -20;
     public const int MaxTemperatureC = 55;
     public const int FahrenheitFreezingPoint = 32;
-    public const double CelsiusToFahrenheitRatio = 0.5556;
+    public const double CelsiusToFahrenheitMultiplier = 1.8;
 }
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => WeatherForecastConstants.FahrenheitFreezingPoint + 
-        (int)(TemperatureC / WeatherForecastConstants.CelsiusToFahrenheitRatio);
+        (int)(TemperatureC * WeatherForecastConstants.CelsiusToFahrenheitMultiplier);
 }
+
+// Make Program class accessible to test project
+public partial class Program { }
