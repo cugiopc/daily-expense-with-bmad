@@ -12,6 +12,12 @@ builder.Services.AddOpenApi();
 
 // Configure PostgreSQL Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "Database connection string 'DefaultConnection' is not configured. " +
+        "Set it in appsettings.Development.json for local dev or as environment variable for production.");
+}
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -28,9 +34,26 @@ builder.Services.AddCors(options =>
 });
 
 // Configure JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    throw new InvalidOperationException(
+        "JWT Secret is not configured. " +
+        "Set 'Jwt:Secret' in appsettings.Development.json for local dev or as environment variable for production. " +
+        "Secret must be at least 256 bits (32 characters).");
+}
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+if (string.IsNullOrWhiteSpace(jwtIssuer))
+{
+    throw new InvalidOperationException("JWT Issuer is not configured. Set 'Jwt:Issuer' in appsettings.json.");
+}
+
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+if (string.IsNullOrWhiteSpace(jwtAudience))
+{
+    throw new InvalidOperationException("JWT Audience is not configured. Set 'Jwt:Audience' in appsettings.json.");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -53,6 +76,10 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// Add health checks
+builder.Services.AddHealthChecks()
+    .AddNpgSql(connectionString, name: "database", timeout: TimeSpan.FromSeconds(3));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -68,6 +95,18 @@ app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Health check endpoints
+app.MapHealthChecks("/health");
+app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false // Liveness check - just returns if app is running
+});
+
+// WeatherForecast demo endpoint
 var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
@@ -75,11 +114,11 @@ var summaries = new[]
 
 app.MapGet("/weatherforecast", () =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
+    var forecast =  Enumerable.Range(1, WeatherForecastConstants.ForecastDays).Select(index =>
         new WeatherForecast
         (
             DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
+            Random.Shared.Next(WeatherForecastConstants.MinTemperatureC, WeatherForecastConstants.MaxTemperatureC),
             summaries[Random.Shared.Next(summaries.Length)]
         ))
         .ToArray();
@@ -89,7 +128,18 @@ app.MapGet("/weatherforecast", () =>
 
 app.Run();
 
+// WeatherForecast constants
+static class WeatherForecastConstants
+{
+    public const int ForecastDays = 5;
+    public const int MinTemperatureC = -20;
+    public const int MaxTemperatureC = 55;
+    public const int FahrenheitFreezingPoint = 32;
+    public const double CelsiusToFahrenheitRatio = 0.5556;
+}
+
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    public int TemperatureF => WeatherForecastConstants.FahrenheitFreezingPoint + 
+        (int)(TemperatureC / WeatherForecastConstants.CelsiusToFahrenheitRatio);
 }
