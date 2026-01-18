@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Import centralized theme color constant
+const THEME_PRIMARY_COLOR = '#1976d2' // Synced with theme.ts THEME_COLORS.primary
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -15,9 +18,11 @@ export default defineConfig({
         short_name: 'Expenses',
         description: 'Track daily expenses with offline-first PWA',
         start_url: '/',
+        scope: '/',
         display: 'standalone',
         background_color: '#ffffff',
-        theme_color: '#1976d2',
+        theme_color: THEME_PRIMARY_COLOR,
+        categories: ['finance', 'productivity', 'utilities'],
         icons: [
           { src: 'icon-72x72.png', sizes: '72x72', type: 'image/png' },
           { src: 'icon-96x96.png', sizes: '96x96', type: 'image/png' },
