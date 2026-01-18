@@ -1,4 +1,7 @@
+using DailyExpenses.Api.Authentication;
 using DailyExpenses.Api.Data;
+using DailyExpenses.Api.Extensions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,30 +13,57 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Add Controllers
+builder.Services.AddControllers();
+
+// Register authentication services and validators (LOW-2: Extracted to extension method)
+builder.Services.AddAuthenticationServices();
+
 // Configure PostgreSQL Database
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
+// Skip database configuration in Testing environment (tests use InMemory database)
+if (builder.Environment.EnvironmentName != "Testing")
 {
-    throw new InvalidOperationException(
-        "Database connection string 'DefaultConnection' is not configured. " +
-        "Set it in appsettings.Development.json for local dev or as environment variable for production.");
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "Database connection string 'DefaultConnection' is not configured. " +
+            "Set it in appsettings.Development.json for local dev or as environment variable for production.");
+    }
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(connectionString));
 }
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
 
 // Configure CORS for frontend communication
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Vite dev server
-              .AllowAnyHeader()
+        // Environment-driven CORS origins (production-safe)
+        var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(";") ?? new[] { "http://localhost:5173" };
+        policy.WithOrigins(allowedOrigins)
+              .WithHeaders("Content-Type", "Authorization") // Whitelist specific headers
               .AllowAnyMethod()
               .AllowCredentials(); // Required for httpOnly cookies
     });
 });
 
 // Configure JWT Authentication
+// In Testing environment, add test JWT configuration
+if (builder.Environment.EnvironmentName == "Testing")
+{
+    var testConfig = new Dictionary<string, string?>
+    {
+        ["Jwt:Secret"] = "ThisIsATestSecretKeyForUnitTestingPurposesOnly12345",
+        ["Jwt:Issuer"] = "DailyExpenses.Api",
+        ["Jwt:Audience"] = "DailyExpenses.Client",
+        ["Jwt:AccessTokenExpirationMinutes"] = "60",
+        ["Jwt:RefreshTokenExpirationDays"] = "7"
+    };
+    builder.Configuration.AddInMemoryCollection(testConfig);
+}
+
 var jwtSecret = builder.Configuration["Jwt:Secret"];
 if (string.IsNullOrWhiteSpace(jwtSecret))
 {
@@ -71,6 +101,9 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    options.SaveToken = true;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment() && builder.Environment.EnvironmentName != "Testing";
+    
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -79,15 +112,24 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtIssuer,
         ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ClockSkew = TimeSpan.Zero // No grace period for token expiry
     };
 });
 
 builder.Services.AddAuthorization();
 
-// Add health checks
-builder.Services.AddHealthChecks()
-    .AddNpgSql(connectionString, name: "database", timeout: TimeSpan.FromSeconds(3));
+// Add health checks (skip database check in Testing environment)
+if (builder.Environment.EnvironmentName != "Testing")
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+    builder.Services.AddHealthChecks()
+        .AddNpgSql(connectionString, name: "database", timeout: TimeSpan.FromSeconds(3));
+}
+else
+{
+    builder.Services.AddHealthChecks();
+}
 
 var app = builder.Build();
 
@@ -103,6 +145,9 @@ app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map controllers
+app.MapControllers();
 
 // Health check endpoints
 app.MapHealthChecks("/health");

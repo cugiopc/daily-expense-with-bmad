@@ -2,14 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './App'
+import { AuthProvider } from './contexts/AuthContext'
 
-// Helper to render App with Router
+// Helper to render App with Router and AuthProvider
 const renderApp = (initialRoute = '/') => {
   window.history.pushState({}, 'Test page', initialRoute)
   return render(
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </AuthProvider>
   )
 }
 

@@ -10,12 +10,17 @@ public class ApiResponse<T>
     /// <summary>
     /// The data payload. Contains the actual response object on success, or error details on failure.
     /// </summary>
-    public T Data { get; set; }
+    public T? Data { get; set; }
 
     /// <summary>
     /// Indicates whether the operation was successful.
     /// </summary>
     public bool Success { get; set; }
+
+    /// <summary>
+    /// Parameterless constructor for JSON deserialization.
+    /// </summary>
+    public ApiResponse() { }
 
     /// <summary>
     /// Private constructor - use static factory methods instead.

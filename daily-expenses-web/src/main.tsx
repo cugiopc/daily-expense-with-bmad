@@ -9,6 +9,7 @@ import './index.css'
 import { App } from './App.tsx'
 import { theme, THEME_COLORS, APP_TEXT } from './theme/theme.ts'
 import { ErrorBoundary } from './shared/components/index.ts'
+import { AuthProvider } from './contexts/AuthContext.tsx'
 
 // Create TanStack Query client with project-context configuration
 const queryClient = new QueryClient({
@@ -67,15 +68,17 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
-            <App />
-          </ThemeProvider>
-        </BrowserRouter>
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <ThemeProvider theme={theme}>
+              <CssBaseline />
+              <App />
+            </ThemeProvider>
+          </BrowserRouter>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+      </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,
 )
