@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
 
     // DbSets
     public DbSet<User> Users { get; set; } = null!;
+    public DbSet<Expense> Expenses { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +75,72 @@ public class AppDbContext : DbContext
                 .HasColumnName("updated_at")
                 .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        // Expense entity configuration
+        modelBuilder.Entity<Expense>(entity =>
+        {
+            // Table name: expenses (lowercase plural)
+            entity.ToTable("expenses");
+            
+            // Primary key configuration
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasDefaultValueSql("gen_random_uuid()");
+            
+            // UserId configuration (foreign key)
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+            
+            // Amount configuration (DECIMAL 10,2 for currency)
+            entity.Property(e => e.Amount)
+                .HasColumnName("amount")
+                .HasPrecision(10, 2)
+                .IsRequired();
+            
+            // Note configuration (TEXT, nullable)
+            entity.Property(e => e.Note)
+                .HasColumnName("note")
+                .HasColumnType("text")
+                .IsRequired(false);
+            
+            // Date configuration (DATE column, no time component)
+            entity.Property(e => e.Date)
+                .HasColumnName("date")
+                .HasColumnType("date")
+                .IsRequired();
+            
+            // CreatedAt configuration
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            
+            // UpdatedAt configuration
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+            
+            // Composite index on (user_id, date DESC) for fast newest-first queries
+            // CRITICAL for NFR6: <50ms performance for daily/monthly aggregations
+            entity.HasIndex(e => new { e.UserId, e.Date })
+                .HasDatabaseName("idx_expenses_user_date")
+                .IsDescending(false, true); // UserId ASC, Date DESC
+            
+            // Index on (user_id, created_at DESC) for recent notes quick selection (Story 2.12)
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt })
+                .HasDatabaseName("idx_expenses_user_created")
+                .IsDescending(false, true); // UserId ASC, CreatedAt DESC
+            
+            // Foreign key relationship to User entity
+            // CASCADE delete: deleting user deletes all their expenses
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
