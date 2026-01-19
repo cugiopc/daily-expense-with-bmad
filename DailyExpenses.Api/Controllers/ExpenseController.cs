@@ -4,6 +4,7 @@ using DailyExpenses.Api.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Security.Claims;
 
@@ -120,6 +121,77 @@ public class ExpenseController : ControllerBase
             nameof(GetExpenseById),
             new { id = expense.Id },
             response);
+    }
+
+    /// <summary>
+    /// Gets a list of expenses for the authenticated user, filtered by date range.
+    /// If no date range is provided, defaults to the current month.
+    /// </summary>
+    /// <param name="startDate">Start date of the range (inclusive). Defaults to first day of current month if not provided.</param>
+    /// <param name="endDate">End date of the range (inclusive). Defaults to last day of current month if not provided.</param>
+    /// <returns>
+    /// 200 OK: List of expenses filtered by date range, ordered by date DESC then createdAt DESC
+    /// 400 Bad Request: Invalid date range (startDate > endDate)
+    /// 401 Unauthorized: Missing or invalid JWT token
+    /// </returns>
+    [HttpGet]
+    public async Task<IActionResult> GetExpenses(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        // Extract userId from JWT token claims
+        var userIdResult = GetUserIdFromToken();
+        if (userIdResult == null)
+        {
+            return Unauthorized(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "User ID not found in token",
+                Code = "INVALID_TOKEN"
+            }));
+        }
+        var userId = userIdResult.Value;
+
+        // Default to current month if no dates provided
+        // Normalize all dates to day boundaries (00:00:00) for consistent date-only comparisons
+        var now = DateTime.UtcNow;
+        var effectiveStartDate = (startDate?.Date ?? new DateTime(now.Year, now.Month, 1));
+        var effectiveEndDate = (endDate?.Date ?? effectiveStartDate.AddMonths(1).AddDays(-1));
+
+        // Validate date range
+        if (effectiveStartDate > effectiveEndDate)
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "Invalid date range: startDate must be less than or equal to endDate",
+                Code = "INVALID_DATE_RANGE"
+            }));
+        }
+
+        // Query expenses with optimized database query
+        // Filter by UserId first to leverage (UserId, Date) index
+        // Project to DTO in database query for memory efficiency (avoids double materialization)
+        var response = await _context.Expenses
+            .Where(e => e.UserId == userId)
+            .Where(e => e.Date >= effectiveStartDate && e.Date <= effectiveEndDate)
+            .OrderByDescending(e => e.Date)
+            .ThenByDescending(e => e.CreatedAt)
+            .Select(e => new ExpenseResponse
+            {
+                Id = e.Id,
+                UserId = e.UserId,
+                Amount = e.Amount,
+                Note = e.Note,
+                Date = e.Date,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt
+            })
+            .ToListAsync();
+
+        _logger.LogInformation(
+            "Expenses retrieved: UserId={UserId}, StartDate={StartDate}, EndDate={EndDate}, Count={Count}",
+            userId, effectiveStartDate, effectiveEndDate, response.Count);
+
+        return Ok(ApiResponse<List<ExpenseResponse>>.SuccessResult(response));
     }
 
     /// <summary>

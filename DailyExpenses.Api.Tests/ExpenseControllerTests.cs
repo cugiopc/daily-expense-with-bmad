@@ -400,4 +400,343 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         var content = await response.Content.ReadAsStringAsync();
         Assert.Contains("Amount must have at most 2 decimal places", content);
     }
+
+    #region GET /api/expenses Tests (Story 2.3)
+
+    [Fact]
+    public async Task GetExpenses_WithValidDateRange_ReturnsFilteredExpenses()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        // Create fresh client for better test isolation (avoids shared state from _client)
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create test expenses with different dates (use past dates)
+        var expense1 = new CreateExpenseRequest { Amount = 45000, Note = "jan 10", Date = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc) };
+        var expense2 = new CreateExpenseRequest { Amount = 50000, Note = "jan 15", Date = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
+        var expense3 = new CreateExpenseRequest { Amount = 30000, Note = "dec 25", Date = new DateTime(2025, 12, 25, 0, 0, 0, DateTimeKind.Utc) };
+
+        var response1 = await client.PostAsJsonAsync("/api/expenses", expense1);
+        var response2 = await client.PostAsJsonAsync("/api/expenses", expense2);
+        var response3 = await client.PostAsJsonAsync("/api/expenses", expense3);
+        
+        Assert.Equal(HttpStatusCode.Created, response1.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response2.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response3.StatusCode);
+
+        // Act - Query for January expenses only
+        var response = await client.GetAsync("/api/expenses?startDate=2026-01-01&endDate=2026-01-31");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Count); // Only Jan expenses
+        Assert.All(result.Data, e => Assert.True(e.Date >= new DateTime(2026, 1, 1) && e.Date <= new DateTime(2026, 1, 31)));
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithoutDateParams_DefaultsToCurrentMonth()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create expense for current month
+        var now = DateTime.UtcNow;
+        var currentMonthExpense = new CreateExpenseRequest
+        {
+            Amount = 25000,
+            Note = "current month",
+            Date = now.Date
+        };
+        await _client.PostAsJsonAsync("/api/expenses", currentMonthExpense);
+
+        // Create expense for previous month
+        var previousMonthExpense = new CreateExpenseRequest
+        {
+            Amount = 35000,
+            Note = "previous month",
+            Date = now.AddMonths(-1).Date
+        };
+        await _client.PostAsJsonAsync("/api/expenses", previousMonthExpense);
+
+        // Act - Query without date parameters
+        var response = await _client.GetAsync("/api/expenses");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        
+        // Should return at least the current month expense
+        Assert.Contains(result.Data, e => e.Note == "current month");
+        
+        // All expenses should be in current month
+        var firstDayOfMonth = new DateTime(now.Year, now.Month, 1);
+        var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
+        Assert.All(result.Data, e => Assert.True(e.Date >= firstDayOfMonth && e.Date <= lastDayOfMonth));
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithEmptyResult_ReturnsEmptyArray()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Act - Query for a date range with no expenses
+        var response = await _client.GetAsync("/api/expenses?startDate=2020-01-01&endDate=2020-01-31");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Empty(result.Data);
+    }
+
+    [Fact]
+    public async Task GetExpenses_OrdersByDateDescThenCreatedAtDesc()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        // Create fresh client for better test isolation (avoids shared state from _client)
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create expenses with same date but different creation times (use past dates)
+        var expense1 = new CreateExpenseRequest { Amount = 10000, Note = "first", Date = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc) };
+        var resp1 = await client.PostAsJsonAsync("/api/expenses", expense1);
+        Assert.Equal(HttpStatusCode.Created, resp1.StatusCode);
+        await Task.Delay(100); // Ensure different CreatedAt timestamps
+
+        var expense2 = new CreateExpenseRequest { Amount = 20000, Note = "second", Date = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc) };
+        var resp2 = await client.PostAsJsonAsync("/api/expenses", expense2);
+        Assert.Equal(HttpStatusCode.Created, resp2.StatusCode);
+
+        // Create expense with newer date
+        var expense3 = new CreateExpenseRequest { Amount = 30000, Note = "newer date", Date = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc) };
+        var resp3 = await client.PostAsJsonAsync("/api/expenses", expense3);
+        Assert.Equal(HttpStatusCode.Created, resp3.StatusCode);
+
+        // Act
+        var response = await client.GetAsync("/api/expenses?startDate=2026-01-01&endDate=2026-01-31");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(3, result.Data.Count);
+
+        // Verify ordering: newest date first
+        Assert.Equal("newer date", result.Data[0].Note);
+        Assert.Equal(new DateTime(2026, 1, 15), result.Data[0].Date.Date);
+
+        // For same date (Jan 10), newest CreatedAt first
+        Assert.Equal("second", result.Data[1].Note);
+        Assert.Equal("first", result.Data[2].Note);
+        Assert.True(result.Data[1].CreatedAt > result.Data[2].CreatedAt);
+    }
+
+    [Fact]
+    public async Task GetExpenses_OnlyReturnsAuthenticatedUsersExpenses()
+    {
+        // Arrange - Create two different users
+        var token1 = await GetAuthTokenAsync();
+        var token2 = await GetAuthTokenAsync();
+
+        // User 1 creates expense
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token1);
+        var user1Expense = new CreateExpenseRequest { Amount = 10000, Note = "user 1 expense", Date = DateTime.UtcNow.Date };
+        await _client.PostAsJsonAsync("/api/expenses", user1Expense);
+
+        // User 2 creates expense
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token2);
+        var user2Expense = new CreateExpenseRequest { Amount = 20000, Note = "user 2 expense", Date = DateTime.UtcNow.Date };
+        await _client.PostAsJsonAsync("/api/expenses", user2Expense);
+
+        // Act - User 1 queries expenses
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token1);
+        var response = await _client.GetAsync("/api/expenses");
+
+        // Assert - User 1 should only see their own expenses
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.All(result.Data, e => Assert.Equal("user 1 expense", e.Note));
+        Assert.DoesNotContain(result.Data, e => e.Note == "user 2 expense");
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithoutAuthentication_Returns401()
+    {
+        // Arrange - No Authorization header
+
+        // Act
+        var response = await _client.GetAsync("/api/expenses");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithStartDateGreaterThanEndDate_Returns400()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Act - Invalid date range
+        var response = await _client.GetAsync("/api/expenses?startDate=2026-01-31&endDate=2026-01-01");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Invalid date range", content);
+        Assert.Contains("INVALID_DATE_RANGE", content);
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithInvalidDateFormat_Returns400()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Act - Invalid date format
+        var response = await _client.GetAsync("/api/expenses?startDate=invalid-date");
+
+        // Assert
+        // ASP.NET Core model binding returns 400 for invalid DateTime format
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetExpenses_PerformanceWithManyExpenses_RespondsUnder200ms()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create 100+ expenses
+        for (int i = 0; i < 100; i++)
+        {
+            var expense = new CreateExpenseRequest
+            {
+                Amount = 10000 + i,
+                Note = $"expense {i}",
+                Date = DateTime.UtcNow.Date.AddDays(-i % 30)
+            };
+            await _client.PostAsJsonAsync("/api/expenses", expense);
+        }
+
+        // Act - Measure response time
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var response = await _client.GetAsync("/api/expenses");
+        stopwatch.Stop();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(stopwatch.ElapsedMilliseconds < 200, 
+            $"Response time {stopwatch.ElapsedMilliseconds}ms exceeded 200ms threshold");
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.NotEmpty(result.Data);
+    }
+
+    [Fact]
+    public async Task GetExpenses_WithSameDateExpenses_OrdersByCreatedAtDesc()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create multiple expenses on the same date
+        var sameDate = new DateTime(2026, 1, 15);
+        
+        var expense1 = new CreateExpenseRequest { Amount = 10000, Note = "morning", Date = sameDate };
+        await _client.PostAsJsonAsync("/api/expenses", expense1);
+        await Task.Delay(50);
+
+        var expense2 = new CreateExpenseRequest { Amount = 20000, Note = "noon", Date = sameDate };
+        await _client.PostAsJsonAsync("/api/expenses", expense2);
+        await Task.Delay(50);
+
+        var expense3 = new CreateExpenseRequest { Amount = 30000, Note = "evening", Date = sameDate };
+        await _client.PostAsJsonAsync("/api/expenses", expense3);
+
+        // Act
+        var response = await _client.GetAsync("/api/expenses?startDate=2026-01-15&endDate=2026-01-15");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<List<ExpenseResponse>>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(3, result.Data.Count);
+
+        // Should be ordered by CreatedAt DESC (newest first)
+        Assert.Equal("evening", result.Data[0].Note);
+        Assert.Equal("noon", result.Data[1].Note);
+        Assert.Equal("morning", result.Data[2].Note);
+    }
+
+    #endregion
 }
