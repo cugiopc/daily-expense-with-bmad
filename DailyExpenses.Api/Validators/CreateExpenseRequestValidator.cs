@@ -22,7 +22,7 @@ public class CreateExpenseRequestValidator : AbstractValidator<CreateExpenseRequ
             .When(x => !string.IsNullOrWhiteSpace(x.Note));
 
         RuleFor(x => x.Date)
-            .LessThanOrEqualTo(DateTime.UtcNow.Date)
+            .LessThanOrEqualTo(DateTime.Now.Date)  // Use local time instead of UTC
             .WithMessage("Date cannot be in the future")
             .When(x => x.Date.HasValue);
     }

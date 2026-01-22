@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { HomePage, NotFoundPage } from './pages/index.ts'
+import { Toaster } from 'react-hot-toast'
+import { HomePage, LoginPage, NotFoundPage } from './pages/index.ts'
+import { ProtectedRoute } from './components/ProtectedRoute.tsx'
 import { useAuth } from './contexts/AuthContext.tsx'
 import { apiClient } from './services/api/apiClient.ts'
 import { setupInterceptors } from './services/api/axiosInterceptor.ts'
@@ -19,9 +21,42 @@ export function App(): JSX.Element {
   }, [authContext])
 
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route 
+          path="/" 
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+
+      {/* Toast notifications for user feedback (Vietnamese language) */}
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            fontSize: '14px',
+          },
+          success: {
+            iconTheme: {
+              primary: '#4caf50',
+              secondary: 'white',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#f44336',
+              secondary: 'white',
+            },
+          },
+        }}
+      />
+    </>
   )
 }

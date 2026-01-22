@@ -1,0 +1,30 @@
+using DailyExpenses.Api.DTOs;
+using FluentValidation;
+
+namespace DailyExpenses.Api.Validators;
+
+/// <summary>
+/// Validator for UpdateExpenseRequest to ensure amount, note, and date meet requirements.
+/// </summary>
+public class UpdateExpenseRequestValidator : AbstractValidator<UpdateExpenseRequest>
+{
+    public UpdateExpenseRequestValidator()
+    {
+        RuleFor(x => x.Amount)
+            .GreaterThan(0)
+            .WithMessage("Amount must be greater than 0")
+            .PrecisionScale(10, 2, false)
+            .WithMessage("Amount must have at most 2 decimal places");
+
+        RuleFor(x => x.Note)
+            .MaximumLength(500)
+            .WithMessage("Note cannot exceed 500 characters")
+            .When(x => !string.IsNullOrWhiteSpace(x.Note));
+
+        RuleFor(x => x.Date)
+            .NotEmpty()
+            .WithMessage("Date is required")
+            .LessThanOrEqualTo(DateTime.Now.Date)  // Use local time instead of UTC
+            .WithMessage("Date cannot be in the future");
+    }
+}

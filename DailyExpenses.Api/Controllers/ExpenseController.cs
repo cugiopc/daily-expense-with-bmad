@@ -1,6 +1,7 @@
 using DailyExpenses.Api.Data;
 using DailyExpenses.Api.DTOs;
 using DailyExpenses.Api.Models;
+using DailyExpenses.Api.Validators;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,16 +21,19 @@ namespace DailyExpenses.Api.Controllers;
 public class ExpenseController : ControllerBase
 {
     private readonly AppDbContext _context;
-    private readonly IValidator<CreateExpenseRequest> _validator;
+    private readonly IValidator<CreateExpenseRequest> _createValidator;
+    private readonly IValidator<UpdateExpenseRequest> _updateValidator;
     private readonly ILogger<ExpenseController> _logger;
 
     public ExpenseController(
         AppDbContext context,
-        IValidator<CreateExpenseRequest> validator,
+        IValidator<CreateExpenseRequest> createValidator,
+        IValidator<UpdateExpenseRequest> updateValidator,
         ILogger<ExpenseController> logger)
     {
         _context = context;
-        _validator = validator;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
         _logger = logger;
     }
 
@@ -46,7 +50,7 @@ public class ExpenseController : ControllerBase
     public async Task<ActionResult<ExpenseResponse>> CreateExpense([FromBody] CreateExpenseRequest request)
     {
         // Validate request with FluentValidation
-        var validationResult = await _validator.ValidateAsync(request);
+        var validationResult = await _createValidator.ValidateAsync(request);
         if (!validationResult.IsValid)
         {
             var errors = validationResult.Errors
@@ -81,8 +85,8 @@ public class ExpenseController : ControllerBase
             ? null
             : WebUtility.HtmlEncode(request.Note.Trim());
 
-        // Default Date to today (UTC) if not provided
-        var expenseDate = request.Date ?? DateTime.UtcNow.Date;
+        // Default Date to today (local timezone) if not provided  
+        var expenseDate = request.Date?.Date ?? DateTime.Now.Date;
 
         // Create new Expense entity
         var expense = new Expense
@@ -116,11 +120,11 @@ public class ExpenseController : ControllerBase
             UpdatedAt = expense.UpdatedAt
         };
 
-        // Return 201 Created with Location header
+        // Return 201 Created with Location header and ApiResponse wrapper
         return CreatedAtAction(
             nameof(GetExpenseById),
             new { id = expense.Id },
-            response);
+            ApiResponse<ExpenseResponse>.SuccessResult(response));
     }
 
     /// <summary>
@@ -153,7 +157,7 @@ public class ExpenseController : ControllerBase
 
         // Default to current month if no dates provided
         // Normalize all dates to day boundaries (00:00:00) for consistent date-only comparisons
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now; // Use local time instead of UTC
         var effectiveStartDate = (startDate?.Date ?? new DateTime(now.Year, now.Month, 1));
         var effectiveEndDate = (endDate?.Date ?? effectiveStartDate.AddMonths(1).AddDays(-1));
 
@@ -203,6 +207,168 @@ public class ExpenseController : ControllerBase
     {
         // TODO: Implement in Story 2.3
         return NotFound(new { Message = "Endpoint not yet implemented. Coming in Story 2.3." });
+    }
+
+    /// <summary>
+    /// Updates an existing expense for the authenticated user.
+    /// </summary>
+    /// <param name="id">ID of the expense to update</param>
+    /// <param name="request">Updated expense data (amount, note, date)</param>
+    /// <returns>
+    /// 200 OK: Expense updated successfully
+    /// 400 Bad Request: Validation failed (amount <= 0, note too long, or date in future)
+    /// 401 Unauthorized: Missing or invalid JWT token
+    /// 403 Forbidden: User is not the owner of this expense
+    /// 404 Not Found: Expense with given ID does not exist
+    /// </returns>
+    [HttpPut("{id}")]
+    public async Task<ActionResult<ExpenseResponse>> UpdateExpense(Guid id, [FromBody] UpdateExpenseRequest request)
+    {
+        // Validate request with FluentValidation
+        var validationResult = await _updateValidator.ValidateAsync(request);
+        if (!validationResult.IsValid)
+        {
+            var errors = validationResult.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(e => e.ErrorMessage).ToArray()
+                );
+
+            return BadRequest(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "Validation failed",
+                Code = "VALIDATION_ERROR",
+                Errors = errors
+            }));
+        }
+
+        // Extract userId from JWT token claims
+        var userIdResult = GetUserIdFromToken();
+        if (userIdResult == null)
+        {
+            return Unauthorized(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "User ID not found in token",
+                Code = "INVALID_TOKEN"
+            }));
+        }
+        var userId = userIdResult.Value;
+
+        // Find existing expense
+        var expense = await _context.Expenses.FindAsync(id);
+        if (expense == null)
+        {
+            return NotFound(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "Expense not found",
+                Code = "NOT_FOUND"
+            }));
+        }
+
+        // Authorization check: only owner can edit
+        if (expense.UserId != userId)
+        {
+            _logger.LogWarning(
+                "Forbidden: User {RequestUserId} attempted to edit expense {ExpenseId} owned by {OwnerUserId}",
+                userId, id, expense.UserId);
+
+            return Forbid();
+        }
+
+        // Sanitize Note field to prevent XSS attacks
+        var sanitizedNote = string.IsNullOrWhiteSpace(request.Note)
+            ? null
+            : WebUtility.HtmlEncode(request.Note.Trim());
+
+        // Update expense fields
+        expense.Amount = request.Amount;
+        expense.Note = sanitizedNote;
+        expense.Date = request.Date.Date; // Normalize to date only
+        expense.UpdatedAt = DateTime.UtcNow;
+
+        // Save changes to database
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Expense updated: Id={ExpenseId}, UserId={UserId}, Amount={Amount}, Date={Date}",
+            expense.Id, expense.UserId, expense.Amount, expense.Date);
+
+        // Build response
+        var response = new ExpenseResponse
+        {
+            Id = expense.Id,
+            UserId = expense.UserId,
+            Amount = expense.Amount,
+            Note = expense.Note,
+            Date = expense.Date,
+            CreatedAt = expense.CreatedAt,
+            UpdatedAt = expense.UpdatedAt
+        };
+
+        return Ok(ApiResponse<ExpenseResponse>.SuccessResult(response));
+    }
+
+    /// <summary>
+    /// Deletes an expense by ID for the authenticated user.
+    /// </summary>
+    /// <param name="id">ID of the expense to delete</param>
+    /// <returns>
+    /// 200 OK: Expense deleted successfully
+    /// 401 Unauthorized: Missing or invalid JWT token
+    /// 403 Forbidden: User is not the owner of this expense
+    /// 404 Not Found: Expense with given ID does not exist
+    /// </returns>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteExpense(Guid id)
+    {
+        // Extract userId from JWT token claims
+        var userIdResult = GetUserIdFromToken();
+        if (userIdResult == null)
+        {
+            return Unauthorized(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "User ID not found in token",
+                Code = "INVALID_TOKEN"
+            }));
+        }
+        var userId = userIdResult.Value;
+
+        // Find existing expense
+        var expense = await _context.Expenses.FindAsync(id);
+        if (expense == null)
+        {
+            return NotFound(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "Expense not found",
+                Code = "NOT_FOUND"
+            }));
+        }
+
+        // Authorization check: only owner can delete
+        if (expense.UserId != userId)
+        {
+            _logger.LogWarning(
+                "Forbidden: User {RequestUserId} attempted to delete expense {ExpenseId} owned by {OwnerUserId}",
+                userId, id, expense.UserId);
+
+            return Forbid();
+        }
+
+        // Delete from database
+        _context.Expenses.Remove(expense);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Expense deleted: Id={ExpenseId}, UserId={UserId}, Amount={Amount}",
+            expense.Id, expense.UserId, expense.Amount);
+
+        // Return 200 OK with success message
+        return Ok(ApiResponse<object>.SuccessResult(new
+        {
+            Message = "Expense deleted successfully",
+            DeletedId = id
+        }));
     }
 
     /// <summary>

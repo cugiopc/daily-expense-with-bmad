@@ -1,0 +1,175 @@
+/* ExpenseListGrouped.css */
+
+.expense-list-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Date Group Section */
+.expense-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Date Header */
+.expense-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.expense-group-date {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #212121);
+  margin: 0;
+}
+
+.expense-group-total {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary, #1976d2);
+}
+
+/* Expense List */
+.expense-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Expense Item - with swipe support */
+.expense-item {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Expense content wrapper (slides on swipe) */
+.expense-item .expense-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 16px;
+  background-color: var(--color-surface, #ffffff);
+  transition: transform 0.2s ease-out;
+}
+
+.expense-item:hover .expense-content {
+  background-color: var(--color-hover, #f5f5f5);
+}
+
+.expense-item:active .expense-content {
+  background-color: var(--color-active, #eeeeee);
+}
+
+/* Swiped state - content slides left */
+.expense-item.swiped .expense-content {
+  transform: translateX(-80px);
+}
+
+/* Delete button (hidden by default, revealed on swipe) */
+.expense-item .delete-button {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: #f44336; /* Error red from theme */
+  color: white;
+  border: none;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.expense-item.swiped .delete-button {
+  transform: translateX(0);
+}
+
+.expense-item .delete-button:hover {
+  background: #d32f2f; /* Darker red on hover */
+}
+
+.expense-item .delete-button:active {
+  background: #b71c1c; /* Even darker on tap */
+}
+
+.expense-item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0; /* Allows text truncation */
+}
+
+.expense-time {
+  font-size: 14px;
+  color: var(--color-text-secondary, #757575);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.expense-note {
+  font-size: 14px;
+  color: var(--color-text-primary, #212121);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-amount {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #212121);
+  flex-shrink: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .expense-list-grouped {
+    gap: 20px;
+  }
+
+  .expense-group-header {
+    padding: 6px 0;
+  }
+
+  .expense-group-date,
+  .expense-group-total {
+    font-size: 14px;
+  }
+
+  .expense-item {
+    padding: 10px 12px;
+  }
+
+  .expense-time,
+  .expense-note {
+    font-size: 13px;
+  }
+
+  .expense-amount {
+    font-size: 14px;
+  }
+}

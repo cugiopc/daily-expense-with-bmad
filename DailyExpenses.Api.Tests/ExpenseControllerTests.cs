@@ -81,12 +81,15 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        Assert.NotNull(expenseResponse);
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
+        
         Assert.NotEqual(Guid.Empty, expenseResponse.Id);
         Assert.NotEqual(Guid.Empty, expenseResponse.UserId);
         Assert.Equal(45000, expenseResponse.Amount);
@@ -187,12 +190,15 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        Assert.NotNull(expenseResponse);
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
+        
         Assert.Equal(DateTime.UtcNow.Date, expenseResponse.Date.Date);
     }
 
@@ -217,12 +223,15 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        Assert.NotNull(expenseResponse);
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
+        
         // Verify that Note is HTML encoded
         Assert.DoesNotContain("<script>", expenseResponse.Note);
         Assert.Contains("&lt;script&gt;", expenseResponse.Note); // HTML encoded
@@ -297,10 +306,14 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
+
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
 
         // Verify in database
         using var scope = _factory.Services.CreateScope();
@@ -337,12 +350,15 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        Assert.NotNull(expenseResponse);
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
+        
         Assert.Null(expenseResponse.Note);
     }
 
@@ -367,12 +383,15 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var content = await response.Content.ReadAsStringAsync();
-        var expenseResponse = JsonSerializer.Deserialize<ExpenseResponse>(content, new JsonSerializerOptions
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });
 
-        Assert.NotNull(expenseResponse);
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        var expenseResponse = apiResponse.Data;
+        
         // Verify that Note is trimmed and HTML encoded (no leading/trailing spaces)
         Assert.Equal("test note with spaces", expenseResponse.Note);
     }
@@ -736,6 +755,308 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
         Assert.Equal("evening", result.Data[0].Note);
         Assert.Equal("noon", result.Data[1].Note);
         Assert.Equal("morning", result.Data[2].Note);
+    }
+
+    #endregion
+
+    #region PUT /api/expenses/{id} Tests
+
+    [Fact]
+    public async Task UpdateExpense_WithValidData_Returns200OK()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create an expense first
+        var createRequest = new CreateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "original note",
+            Date = new DateTime(2026, 1, 15)
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/expenses", createRequest);
+        var createContent = await createResponse.Content.ReadAsStringAsync();
+        var createdExpense = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(createContent, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        })?.Data;
+
+        Assert.NotNull(createdExpense);
+
+        // Update the expense
+        var updateRequest = new UpdateExpenseRequest
+        {
+            Amount = 75000,
+            Note = "updated note",
+            Date = new DateTime(2026, 1, 16)
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/expenses/{createdExpense.Id}", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(createdExpense.Id, result.Data.Id);
+        Assert.Equal(75000, result.Data.Amount);
+        Assert.Equal("updated note", result.Data.Note);
+        Assert.Equal(new DateTime(2026, 1, 16), result.Data.Date.Date);
+        Assert.True(result.Data.UpdatedAt > createdExpense.UpdatedAt); // UpdatedAt should be newer
+    }
+
+    [Fact]
+    public async Task UpdateExpense_WithInvalidAmount_Returns400BadRequest()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create an expense first
+        var createRequest = new CreateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "test",
+            Date = new DateTime(2026, 1, 15)
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/expenses", createRequest);
+        var createContent = await createResponse.Content.ReadAsStringAsync();
+        var createdExpense = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(createContent, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        })?.Data;
+
+        Assert.NotNull(createdExpense);
+
+        // Try to update with invalid amount
+        var updateRequest = new UpdateExpenseRequest
+        {
+            Amount = 0, // Invalid: must be > 0
+            Note = "test note",
+            Date = new DateTime(2026, 1, 15)
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/expenses/{createdExpense.Id}", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var result = JsonSerializer.Deserialize<ApiResponse<object>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(result);
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task UpdateExpense_NotOwner_Returns403Forbidden()
+    {
+        // Arrange - User 1 creates an expense
+        var token1 = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token1);
+
+        var createRequest = new CreateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "user 1 expense",
+            Date = new DateTime(2026, 1, 15)
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/expenses", createRequest);
+        var createContent = await createResponse.Content.ReadAsStringAsync();
+        var createdExpense = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(createContent, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        })?.Data;
+
+        Assert.NotNull(createdExpense);
+
+        // User 2 tries to update User 1's expense
+        var token2 = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token2);
+
+        var updateRequest = new UpdateExpenseRequest
+        {
+            Amount = 99999,
+            Note = "trying to hack",
+            Date = new DateTime(2026, 1, 15)
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/expenses/{createdExpense.Id}", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateExpense_NonExistentExpense_Returns404NotFound()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var nonExistentId = Guid.NewGuid();
+        var updateRequest = new UpdateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "test",
+            Date = new DateTime(2026, 1, 15)
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/expenses/{nonExistentId}", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateExpense_WithoutAuthentication_Returns401Unauthorized()
+    {
+        // Arrange
+        _client.DefaultRequestHeaders.Clear(); // Remove auth header
+
+        var updateRequest = new UpdateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "test",
+            Date = new DateTime(2026, 1, 15)
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/api/expenses/{Guid.NewGuid()}", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    #endregion
+
+    #region DELETE /api/expenses/{id} Tests (Story 2.9)
+
+    [Fact]
+    public async Task DeleteExpense_ValidRequest_Returns200OK()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create an expense first
+        var createRequest = new CreateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "expense to delete",
+            Date = new DateTime(2026, 1, 15)
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/expenses", createRequest);
+        var createContent = await createResponse.Content.ReadAsStringAsync();
+        var createdExpense = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(createContent, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        })?.Data;
+
+        Assert.NotNull(createdExpense);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/expenses/{createdExpense.Id}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Expense deleted successfully", content);
+        Assert.Contains(createdExpense.Id.ToString(), content);
+
+        // Verify expense is actually deleted from database
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var deletedExpense = await context.Expenses.FindAsync(createdExpense.Id);
+        Assert.Null(deletedExpense);
+    }
+
+    [Fact]
+    public async Task DeleteExpense_NotOwner_Returns403Forbidden()
+    {
+        // Arrange - User 1 creates an expense
+        var token1 = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token1);
+
+        var createRequest = new CreateExpenseRequest
+        {
+            Amount = 50000,
+            Note = "user 1 expense",
+            Date = new DateTime(2026, 1, 15)
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/expenses", createRequest);
+        var createContent = await createResponse.Content.ReadAsStringAsync();
+        var createdExpense = JsonSerializer.Deserialize<ApiResponse<ExpenseResponse>>(createContent, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        })?.Data;
+
+        Assert.NotNull(createdExpense);
+
+        // User 2 tries to delete User 1's expense
+        var token2 = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token2);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/expenses/{createdExpense.Id}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+
+        // Verify expense still exists
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var expense = await context.Expenses.FindAsync(createdExpense.Id);
+        Assert.NotNull(expense);
+    }
+
+    [Fact]
+    public async Task DeleteExpense_NonExistentExpense_Returns404NotFound()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var nonExistentId = Guid.NewGuid();
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/expenses/{nonExistentId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Expense not found", content);
+        Assert.Contains("NOT_FOUND", content);
+    }
+
+    [Fact]
+    public async Task DeleteExpense_WithoutAuthentication_Returns401Unauthorized()
+    {
+        // Arrange - No Authorization header
+        _client.DefaultRequestHeaders.Clear();
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/expenses/{Guid.NewGuid()}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     #endregion
