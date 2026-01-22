@@ -22,6 +22,22 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+// Mock useOnlineStatus hook - default to online
+vi.mock('../../../hooks/useOnlineStatus', () => ({
+  useOnlineStatus: vi.fn(() => true),
+}));
+
+// Mock IndexedDB services (not used when online, but needed for imports)
+vi.mock('../../../services/indexeddb/index', () => ({
+  createExpense: vi.fn(),
+  getPendingSyncExpenses: vi.fn(() => Promise.resolve([])),
+}));
+
+// Mock JWT helper to return a valid user ID
+vi.mock('../../../shared/utils/jwtHelper', () => ({
+  getUserIdFromToken: vi.fn(() => 'test-user-123'),
+}));
+
 describe('ExpenseForm', () => {
   let queryClient: QueryClient;
 
@@ -136,8 +152,8 @@ describe('ExpenseForm', () => {
     await user.click(noteField);
     await user.type(noteField, 'cafe');
 
-    // Press Enter in note field
-    await user.keyboard('{Enter}');
+    // Press Enter in note field (target the note field specifically)
+    await user.type(noteField, '{Enter}');
 
     // Should call API and trigger onSuccess
     await waitFor(() => {

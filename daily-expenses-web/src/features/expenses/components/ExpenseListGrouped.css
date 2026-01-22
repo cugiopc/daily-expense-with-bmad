@@ -136,6 +136,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pending sync badge */
+.pending-badge {
+  font-size: 12px;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .expense-amount {

@@ -151,7 +151,14 @@ export default function ExpenseListGrouped({ expenses }: ExpenseListGroupedProps
                   >
                     <div className="expense-item-main">
                       <time className="expense-time">{formatTime(expense.createdAt)}</time>
-                      <span className="expense-note">{expense.note}</span>
+                      <span className="expense-note">
+                        {expense.note}
+                        {expense.pending_sync && (
+                          <span className="pending-badge" title="Đang chờ đồng bộ">
+                            ⏳
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <span className="expense-amount">{formatCurrency(expense.amount)}</span>
                   </div>

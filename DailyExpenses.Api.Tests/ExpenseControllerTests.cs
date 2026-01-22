@@ -1060,4 +1060,297 @@ public class ExpenseControllerTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     #endregion
+
+    #region POST /api/expenses/sync Tests (Story 2.10 - Task 4.2)
+
+    [Fact]
+    public async Task SyncExpenses_WithValidBatch_Returns201CreatedWithIdMappings()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var tempId1 = Guid.NewGuid().ToString();
+        var tempId2 = Guid.NewGuid().ToString();
+
+        var syncRequests = new List<SyncExpenseRequest>
+        {
+            new()
+            {
+                TempId = tempId1,
+                Amount = 45000,
+                Note = "Offline expense 1",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc)
+            },
+            new()
+            {
+                TempId = tempId2,
+                Amount = 100000,
+                Note = "Offline expense 2",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 12, 0, 0, DateTimeKind.Utc)
+            }
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Debug: Print error response if BadRequest
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            System.Console.WriteLine($"[DEBUG] Validation Error: {errorContent}");
+        }
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<SyncExpenseResponse>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(apiResponse);
+        Assert.NotNull(apiResponse.Data);
+        Assert.True(apiResponse.Success);
+
+        var syncResponse = apiResponse.Data;
+        Assert.NotNull(syncResponse.Synced);
+        Assert.Equal(2, syncResponse.Synced.Count);
+
+        // Verify ID mappings exist
+        var mapping1 = syncResponse.Synced.FirstOrDefault(m => m.TempId == tempId1);
+        Assert.NotNull(mapping1);
+        Assert.NotEqual(Guid.Empty, mapping1.ServerId);
+
+        var mapping2 = syncResponse.Synced.FirstOrDefault(m => m.TempId == tempId2);
+        Assert.NotNull(mapping2);
+        Assert.NotEqual(Guid.Empty, mapping2.ServerId);
+
+        // Verify expenses were actually created in database
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var expense1 = await context.Expenses.FindAsync(mapping1.ServerId);
+        Assert.NotNull(expense1);
+        Assert.Equal(45000, expense1.Amount);
+        Assert.Equal("Offline expense 1", expense1.Note);
+
+        var expense2 = await context.Expenses.FindAsync(mapping2.ServerId);
+        Assert.NotNull(expense2);
+        Assert.Equal(100000, expense2.Amount);
+        Assert.Equal("Offline expense 2", expense2.Note);
+    }
+
+    [Fact]
+    public async Task SyncExpenses_WithInvalidAmount_Returns400BadRequest()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var syncRequests = new List<SyncExpenseRequest>
+        {
+            new()
+            {
+                TempId = "temp-uuid-123",
+                Amount = 0, // Invalid: must be > 0
+                Note = "Invalid expense",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc)
+            }
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<object>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(apiResponse);
+        Assert.False(apiResponse.Success);
+    }
+
+    [Fact]
+    public async Task SyncExpenses_WithEmptyBatch_Returns400BadRequest()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var emptyBatch = new List<SyncExpenseRequest>();
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", emptyBatch);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<object>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(apiResponse);
+        Assert.False(apiResponse.Success);
+    }
+
+    [Fact]
+    public async Task SyncExpenses_WithInvalidTempId_Returns400BadRequest()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var syncRequests = new List<SyncExpenseRequest>
+        {
+            new()
+            {
+                TempId = "invalid-not-a-uuid",
+                Amount = 50000,
+                Note = "Test",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc)
+            }
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SyncExpenses_WithoutAuthentication_Returns401Unauthorized()
+    {
+        // Arrange - No Authorization header
+        _client.DefaultRequestHeaders.Clear();
+
+        var syncRequests = new List<SyncExpenseRequest>
+        {
+            new()
+            {
+                TempId = Guid.NewGuid().ToString(),
+                Amount = 50000,
+                Note = "Test",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc)
+            }
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SyncExpenses_LargeBatch_ProcessesAllExpenses()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        // Create batch of 50 expenses
+        var tempIds = new List<string>();
+        var syncRequests = new List<SyncExpenseRequest>();
+        for (int i = 0; i < 50; i++)
+        {
+            var tempId = Guid.NewGuid().ToString();
+            tempIds.Add(tempId);
+
+            syncRequests.Add(new SyncExpenseRequest
+            {
+                TempId = tempId,
+                Amount = 10000 + (i * 1000),
+                Note = $"Expense {i}",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc).AddMinutes(i)
+            });
+        }
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<SyncExpenseResponse>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(apiResponse);
+        Assert.True(apiResponse.Success);
+        Assert.NotNull(apiResponse.Data);
+        Assert.Equal(50, apiResponse.Data.Synced.Count);
+
+        // Verify all mappings are present
+        for (int i = 0; i < 50; i++)
+        {
+            var mapping = apiResponse.Data.Synced.FirstOrDefault(m => m.TempId == tempIds[i]);
+            Assert.NotNull(mapping);
+            Assert.NotEqual(Guid.Empty, mapping.ServerId);
+        }
+    }
+
+    [Fact]
+    public async Task SyncExpenses_UsesClientTimestampForCreatedAt()
+    {
+        // Arrange
+        var token = await GetAuthTokenAsync();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var clientTimestamp = new DateTime(2026, 1, 22, 9, 30, 0, DateTimeKind.Utc);
+        var tempId = Guid.NewGuid().ToString();
+
+        var syncRequests = new List<SyncExpenseRequest>
+        {
+            new()
+            {
+                TempId = tempId,
+                Amount = 50000,
+                Note = "Test timestamp",
+                Date = new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc),
+                CreatedAt = clientTimestamp
+            }
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/expenses/sync", syncRequests);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var apiResponse = JsonSerializer.Deserialize<ApiResponse<SyncExpenseResponse>>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(apiResponse);
+        var serverId = apiResponse.Data!.Synced[0].ServerId;
+
+        // Verify expense uses client timestamp for CreatedAt (Last-Write-Wins conflict resolution)
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var expense = await context.Expenses.FindAsync(serverId);
+
+        Assert.NotNull(expense);
+        Assert.Equal(clientTimestamp, expense.CreatedAt);
+    }
+
+    #endregion
 }

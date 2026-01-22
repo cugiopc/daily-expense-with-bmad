@@ -12,22 +12,27 @@
  * - Shows daily totals for each group
  * - Displays time for each expense
  * 
+ * Story 2.10 Offline Support:
+ * - Loads from IndexedDB when offline
+ * - Displays pending sync indicator for offline-created expenses
+ * - Merges IndexedDB and API data when online
+ * 
  * Performance: Updates instantly when cache changes (<50ms)
  */
 
-import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Alert,
   Skeleton,
   Typography,
 } from '@mui/material';
-import { getExpenses } from '../api/expensesApi';
+import { useExpenses } from '../hooks/useExpenses';
 import ExpenseListGrouped from './ExpenseListGrouped';
 
 /**
  * ExpenseList component
  * Displays all expenses with real-time updates and grouping by date
+ * Supports offline mode with IndexedDB fallback
  */
 export function ExpenseList() {
   const {
@@ -35,13 +40,7 @@ export function ExpenseList() {
     isLoading,
     isError,
     error,
-  } = useQuery({
-    queryKey: ['expenses'],
-    queryFn: getExpenses,
-    staleTime: 5 * 60 * 1000, // 5 minutes (from architecture config)
-    cacheTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: true,
-  });
+  } = useExpenses();
 
   // Loading state - Show skeleton on initial load only
   if (isLoading) {

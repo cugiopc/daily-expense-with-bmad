@@ -23,17 +23,20 @@ public class ExpenseController : ControllerBase
     private readonly AppDbContext _context;
     private readonly IValidator<CreateExpenseRequest> _createValidator;
     private readonly IValidator<UpdateExpenseRequest> _updateValidator;
+    private readonly IValidator<SyncExpenseRequest> _syncValidator;
     private readonly ILogger<ExpenseController> _logger;
 
     public ExpenseController(
         AppDbContext context,
         IValidator<CreateExpenseRequest> createValidator,
         IValidator<UpdateExpenseRequest> updateValidator,
+        IValidator<SyncExpenseRequest> syncValidator,
         ILogger<ExpenseController> logger)
     {
         _context = context;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
+        _syncValidator = syncValidator;
         _logger = logger;
     }
 
@@ -369,6 +372,115 @@ public class ExpenseController : ControllerBase
             Message = "Expense deleted successfully",
             DeletedId = id
         }));
+    }
+
+    /// <summary>
+    /// Syncs multiple offline-created expenses to the server in a batch.
+    /// Used for offline-first functionality with IndexedDB.
+    /// </summary>
+    /// <param name="requests">Array of offline expenses to sync</param>
+    /// <returns>
+    /// 200 OK: All expenses synced successfully with temp ID to server ID mapping
+    /// 400 Bad Request: Validation failed for one or more expenses
+    /// 401 Unauthorized: Missing or invalid JWT token
+    /// </returns>
+    [HttpPost("sync")]
+    public async Task<ActionResult<SyncExpenseResponse>> SyncExpenses([FromBody] List<SyncExpenseRequest> requests)
+    {
+        // Validate that at least one expense is provided
+        if (requests == null || !requests.Any())
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "At least one expense is required for sync",
+                Code = "EMPTY_SYNC_BATCH"
+            }));
+        }
+
+        // Extract userId from JWT token claims
+        var userIdResult = GetUserIdFromToken();
+        if (userIdResult == null)
+        {
+            return Unauthorized(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "User ID not found in token",
+                Code = "INVALID_TOKEN"
+            }));
+        }
+        var userId = userIdResult.Value;
+
+        // Validate all expenses in batch
+        var allErrors = new Dictionary<string, string[]>();
+        for (int i = 0; i < requests.Count; i++)
+        {
+            var validationResult = await _syncValidator.ValidateAsync(requests[i]);
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToArray();
+                allErrors[$"[{i}] {requests[i].TempId}"] = errors;
+            }
+        }
+
+        // Return validation errors if any
+        if (allErrors.Any())
+        {
+            return BadRequest(ApiResponse<object>.ErrorResult(new
+            {
+                Message = "Validation failed for one or more expenses",
+                Code = "BATCH_VALIDATION_ERROR",
+                Errors = allErrors
+            }));
+        }
+
+        // Create expense entities and track mappings
+        var syncedMappings = new List<SyncedExpenseMapping>();
+        var expenses = new List<Expense>();
+
+        foreach (var request in requests)
+        {
+            // Sanitize Note field to prevent XSS attacks
+            var sanitizedNote = string.IsNullOrWhiteSpace(request.Note)
+                ? null
+                : WebUtility.HtmlEncode(request.Note.Trim());
+
+            // Create new Expense entity with server-generated ID
+            var serverId = Guid.NewGuid();
+            var expense = new Expense
+            {
+                Id = serverId,
+                UserId = userId,
+                Amount = request.Amount,
+                Note = sanitizedNote,
+                Date = request.Date.Date, // Normalize to date only
+                CreatedAt = request.CreatedAt, // Use client timestamp for Last-Write-Wins
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            expenses.Add(expense);
+
+            // Track mapping
+            syncedMappings.Add(new SyncedExpenseMapping
+            {
+                TempId = request.TempId,
+                ServerId = serverId
+            });
+        }
+
+        // Bulk insert expenses
+        _context.Expenses.AddRange(expenses);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Sync completed: UserId={UserId}, BatchSize={BatchSize}, TotalAmount={TotalAmount}",
+            userId, expenses.Count, expenses.Sum(e => e.Amount));
+
+        // Build response with ID mappings
+        var response = new SyncExpenseResponse
+        {
+            Synced = syncedMappings
+        };
+
+        return Ok(ApiResponse<SyncExpenseResponse>.SuccessResult(response));
     }
 
     /// <summary>

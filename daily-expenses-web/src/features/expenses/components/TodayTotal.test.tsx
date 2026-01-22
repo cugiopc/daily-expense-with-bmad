@@ -14,9 +14,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../../contexts/AuthContext';
 import { TodayTotal } from './TodayTotal';
 import * as expensesApi from '../api/expensesApi';
+import * as useOnlineStatus from '../../../hooks/useOnlineStatus';
 import type { ReactNode } from 'react';
 
 vi.mock('../api/expensesApi');
+vi.mock('../../../hooks/useOnlineStatus');
+vi.mock('../../../shared/utils/jwtHelper', () => ({
+  getUserIdFromToken: vi.fn(() => 'test-user-123'),
+}));
 
 describe('TodayTotal', () => {
   let queryClient: QueryClient;
@@ -30,6 +35,9 @@ describe('TodayTotal', () => {
     });
 
     vi.clearAllMocks();
+
+    // Mock online status as true (use API)
+    vi.mocked(useOnlineStatus.useOnlineStatus).mockReturnValue(true);
   });
 
   const wrapper = ({ children }: { children: ReactNode }) => (

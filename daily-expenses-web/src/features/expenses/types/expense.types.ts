@@ -23,7 +23,12 @@ export interface ExpenseResponse {
   updatedAt: string; // ISO 8601 datetime string
 }
 
-export interface Expense extends ExpenseResponse {}
+export interface Expense extends ExpenseResponse {
+  // Offline-first support (Story 2.10)
+  pending_sync?: boolean; // True if expense was created offline and needs sync
+  syncStatus?: 'pending' | 'synced' | 'failed'; // Sync status
+  localOnly?: boolean; // True if created offline
+}
 
 export interface ApiResponse<T> {
   data: T;
