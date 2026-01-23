@@ -6,9 +6,10 @@ import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { TextField, Button, Box } from '@mui/material';
+import { TextField, Button, Box, Chip } from '@mui/material';
 import { useCreateExpense } from '../hooks/useCreateExpense';
 import { useUpdateExpense } from '../hooks/useUpdateExpense';
+import { useRecentNotes } from '../hooks/useRecentNotes';
 
 // Validation schema following Story 2.2 backend validation
 const expenseSchema = z.object({
@@ -53,19 +54,24 @@ interface ExpenseFormProps {
  * 
  * Performance: <500ms perceived time (optimistic update = instant)
  */
-export function ExpenseForm({ 
-  onSuccess, 
-  initialValues, 
+export function ExpenseForm({
+  onSuccess,
+  initialValues,
   expenseId,
   submitButtonText = 'Thêm chi tiêu'
 }: ExpenseFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!expenseId && !!initialValues;
-  
+
+  // Load recent notes for quick selection chips (Story 2.12)
+  const { recentNotes, refresh: refreshRecentNotes } = useRecentNotes(5);
+
   const {
     control,
     handleSubmit,
     reset,
+    setValue,
+    setFocus,
     formState: { errors },
   } = useForm<ExpenseFormData>({
     resolver: zodResolver(expenseSchema),
@@ -93,6 +99,12 @@ export function ExpenseForm({
 
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense();
+
+  // Handle chip click to auto-fill note field (Story 2.12 AC2)
+  const handleChipClick = (note: string) => {
+    setValue('note', note); // Auto-fill note field
+    setFocus('note'); // Keep focus in note field for editing if needed
+  };
 
   const onSubmit = (data: ExpenseFormData) => {
     // Prevent double submission
@@ -126,7 +138,10 @@ export function ExpenseForm({
       // Reset form immediately for instant next entry (AC: <500ms perceived time)
       // This happens BEFORE API completes - optimistic UI pattern
       reset();
-      
+
+      // Refresh recent notes after successful expense creation (Story 2.12 AC3)
+      refreshRecentNotes();
+
       // Close dialog after successful submission (if callback provided)
       onSuccess?.();
     }
@@ -153,6 +168,36 @@ export function ExpenseForm({
         mt: 1, // Small top margin for better spacing in dialog
       }}
     >
+      {/* Recent Notes Chips - Quick Selection (Story 2.12) */}
+      {recentNotes.length > 0 && !isEditMode && (
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+            mb: 1,
+          }}
+        >
+          {recentNotes.map((note) => (
+            <Chip
+              key={note}
+              label={note}
+              variant="outlined"
+              onClick={() => handleChipClick(note)}
+              sx={{
+                cursor: 'pointer',
+                minHeight: 44, // Accessibility: min touch target size (Story 2.12 AC8)
+                fontSize: '0.875rem',
+                '&:hover': {
+                  backgroundColor: 'primary.light',
+                  opacity: 0.1,
+                },
+              }}
+            />
+          ))}
+        </Box>
+      )}
+
       {/* Amount Field - Auto-focused for fastest entry */}
       <Controller
         name="amount"

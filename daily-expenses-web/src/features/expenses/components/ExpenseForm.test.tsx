@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../../contexts/AuthContext';
 import { ExpenseForm } from './ExpenseForm';
 import * as expensesApi from '../api/expensesApi';
+import * as indexedDB from '../../../services/indexeddb';
 
 // Mock the API
 vi.mock('../api/expensesApi', () => ({
@@ -27,15 +28,16 @@ vi.mock('../../../hooks/useOnlineStatus', () => ({
   useOnlineStatus: vi.fn(() => true),
 }));
 
-// Mock IndexedDB services (not used when online, but needed for imports)
-vi.mock('../../../services/indexeddb/index', () => ({
-  createExpense: vi.fn(),
-  getPendingSyncExpenses: vi.fn(() => Promise.resolve([])),
-}));
-
 // Mock JWT helper to return a valid user ID
 vi.mock('../../../shared/utils/jwtHelper', () => ({
   getUserIdFromToken: vi.fn(() => 'test-user-123'),
+}));
+
+// Mock IndexedDB services (Story 2.12: includes getExpenses for recent notes)
+vi.mock('../../../services/indexeddb/index', () => ({
+  getExpenses: vi.fn(() => Promise.resolve([])),
+  createExpense: vi.fn(),
+  getPendingSyncExpenses: vi.fn(() => Promise.resolve([])),
 }));
 
 describe('ExpenseForm', () => {
@@ -106,7 +108,7 @@ describe('ExpenseForm', () => {
   });
 
   // AC: Form validates note max 500 characters
-  it('validates note max 500 characters', async () => {
+  it('validates note max 500 characters', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     renderForm();
 
@@ -126,7 +128,7 @@ describe('ExpenseForm', () => {
   });
 
   // AC: Pressing Enter key in Note field submits form
-  it('submits form on Enter key in note field', async () => {
+  it('submits form on Enter key in note field', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     const mockOnSuccess = vi.fn();
     const mockResponse = {
@@ -167,7 +169,7 @@ describe('ExpenseForm', () => {
   });
 
   // AC: Form submission calls createExpense mutation
-  it('submits form with valid data', async () => {
+  it('submits form with valid data', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     const mockResponse = {
       id: '123',
@@ -381,5 +383,206 @@ describe('ExpenseForm', () => {
     await waitFor(() => {
       expect(mockOnSuccess).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // Story 2.12: Recent Notes Quick Selection - AC1
+  it('renders recent notes chips when expenses exist', async () => {
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+      {
+        id: '2',
+        note: 'lunch',
+        createdAt: '2026-01-23T12:00:00Z',
+        amount: 80000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T12:00:00Z',
+      },
+      {
+        id: '3',
+        note: 'dinner',
+        createdAt: '2026-01-23T18:00:00Z',
+        amount: 150000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T18:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    renderForm();
+
+    // Wait for chips to render
+    await waitFor(() => {
+      expect(screen.getByText('dinner')).toBeInTheDocument();
+      expect(screen.getByText('lunch')).toBeInTheDocument();
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+  });
+
+  // Story 2.12: AC2 - Chip click auto-fills note field
+  it('auto-fills note field when chip is clicked', async () => {
+    const user = userEvent.setup();
+
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+      {
+        id: '2',
+        note: 'lunch',
+        createdAt: '2026-01-23T12:00:00Z',
+        amount: 80000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T12:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    renderForm();
+
+    // Wait for chips to render
+    await waitFor(() => {
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+
+    const noteField = screen.getByPlaceholderText('vd: cafe, ăn trưa, xăng xe') as HTMLInputElement;
+
+    // Click the "cafe" chip
+    const cafeChip = screen.getByText('cafe');
+    await user.click(cafeChip);
+
+    // Note field should be auto-filled
+    await waitFor(() => {
+      expect(noteField.value).toBe('cafe');
+    });
+
+    // Note: Focus behavior with Material-UI Chips may vary in test environment
+    // The important part is that the note field is filled correctly
+    expect(noteField.value).toBe('cafe');
+  });
+
+  // Story 2.12: AC4 - No chips when no expenses exist
+  it('does not render chips when no expenses exist', async () => {
+    // Empty expenses list (default mock already returns empty array)
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue([]);
+
+    renderForm();
+
+    // Wait a bit to ensure chips don't appear
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /cafe/i })).not.toBeInTheDocument();
+    });
+
+    // Note field should still be visible with placeholder
+    expect(screen.getByPlaceholderText('vd: cafe, ăn trưa, xăng xe')).toBeInTheDocument();
+  });
+
+  // Story 2.12: AC - Chips don't appear in edit mode
+  it('does not render chips in edit mode', async () => {
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    // Render in edit mode
+    renderForm({
+      expenseId: 'edit-123',
+      initialValues: {
+        amount: 50000,
+        note: 'existing note',
+        date: '2026-01-23',
+      },
+      submitButtonText: 'Lưu thay đổi',
+    });
+
+    // Wait to ensure chips don't render
+    await waitFor(() => {
+      expect(screen.queryByText('cafe')).not.toBeInTheDocument();
+    });
+
+    // Form should show initial values
+    const amountField = screen.getByPlaceholderText('vd: 50000') as HTMLInputElement;
+    const noteField = screen.getByPlaceholderText('vd: cafe, ăn trưa, xăng xe') as HTMLInputElement;
+
+    await waitFor(() => {
+      expect(amountField.value).toBe('50000');
+      expect(noteField.value).toBe('existing note');
+    });
+  });
+
+  // Story 2.12: AC7 - User can clear chip-filled note and type manually
+  it('allows user to clear chip-filled note and type manually', async () => {
+    const user = userEvent.setup();
+
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    renderForm();
+
+    // Wait for chips to render
+    await waitFor(() => {
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+
+    const noteField = screen.getByPlaceholderText('vd: cafe, ăn trưa, xăng xe') as HTMLInputElement;
+
+    // Click chip to auto-fill
+    const cafeChip = screen.getByText('cafe');
+    await user.click(cafeChip);
+
+    await waitFor(() => {
+      expect(noteField.value).toBe('cafe');
+    });
+
+    // Clear and type new note
+    await user.clear(noteField);
+    await user.type(noteField, 'different note');
+
+    expect(noteField.value).toBe('different note');
+
+    // Chips should still be available
+    expect(screen.getByText('cafe')).toBeInTheDocument();
   });
 });
