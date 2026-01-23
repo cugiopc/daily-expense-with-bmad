@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSwipeable, SwipeableHandlers } from 'react-swipeable';
+import { useSwipeable } from 'react-swipeable';
 import { Expense } from '../types';
 import { useExpensesGroupedByDay } from '../hooks/useExpensesGroupedByDay';
 import { getDateHeader, formatCurrency, formatTime } from '../hooks/formatters';
@@ -96,16 +96,17 @@ export default function ExpenseListGrouped({ expenses }: ExpenseListGroupedProps
     return () => document.removeEventListener('click', handleClickOutside);
   }, [swipedExpenseId]);
 
-  // Create swipe handlers for an expense
-  const createSwipeHandlers = useCallback((expenseId: string): SwipeableHandlers => {
-    return useSwipeable({
-      onSwipedLeft: () => setSwipedExpenseId(expenseId),
-      onSwipedRight: () => setSwipedExpenseId(null),
-      trackMouse: true, // Allow mouse swipe for desktop testing
-      delta: 50, // Minimum swipe distance in pixels
-      preventScrollOnSwipe: true,
-    });
-  }, []);
+  // Create base swipe handlers - called once at component level
+  const baseSwipeHandlers = useSwipeable({
+    onSwipedLeft: (event) => {
+      const expenseId = (event.event.currentTarget as HTMLElement).closest('.expense-item')?.getAttribute('data-expense-id');
+      if (expenseId) setSwipedExpenseId(expenseId);
+    },
+    onSwipedRight: () => setSwipedExpenseId(null),
+    trackMouse: true, // Allow mouse swipe for desktop testing
+    delta: 50, // Minimum swipe distance in pixels
+    preventScrollOnSwipe: true,
+  });
 
   // Find expense for delete dialog
   const expenseToDelete = confirmDeleteId
@@ -129,13 +130,13 @@ export default function ExpenseListGrouped({ expenses }: ExpenseListGroupedProps
           {/* Expense List */}
           <ul className="expense-list" role="list">
             {group.expenses.map((expense) => {
-              const swipeHandlers = createSwipeHandlers(expense.id);
               const isSwiped = swipedExpenseId === expense.id;
 
               return (
                 <li
                   key={expense.id}
-                  {...swipeHandlers}
+                  {...baseSwipeHandlers}
+                  data-expense-id={expense.id}
                   className={`expense-item ${isSwiped ? 'swiped' : ''}`}
                   tabIndex={0}
                   onKeyDown={(e) => {

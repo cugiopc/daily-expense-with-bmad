@@ -62,7 +62,7 @@ development_status:
   2-9-delete-expense-with-swipe-action: done
   2-10-indexeddb-offline-storage: done
   2-11-tanstack-query-integration-for-caching: done
-  2-12-recent-notes-quick-selection: review
+  2-12-recent-notes-quick-selection: done
   epic-2-retrospective: optional
 
   # Epic 3: Budget Management & Alerts

@@ -121,7 +121,27 @@ export function useCreateExpense() {
     },
 
     // REFETCH on success (get server data with real IDs and timestamps)
-    onSuccess: () => {
+    onSuccess: async (expense) => {
+      // Save to IndexedDB for offline-first architecture
+      // This ensures recent notes are available even after page refresh
+      try {
+        const userId = getUserIdFromToken(accessToken);
+        if (userId && expense) {
+          await createOfflineExpense({
+            userId,
+            amount: expense.amount,
+            note: expense.note || '',
+            date: expense.date,
+            pending_sync: false, // Already synced with server
+            syncStatus: 'synced',
+            localOnly: false,
+          });
+        }
+      } catch (error) {
+        // Non-fatal: IndexedDB save failed but API succeeded
+        console.warn('[useCreateExpense] Failed to save to IndexedDB:', error);
+      }
+
       // Invalidate related queries to trigger refetch
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expenses', 'stats'] });

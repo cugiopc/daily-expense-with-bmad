@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getExpenses } from '../../../services/indexeddb';
 import { getUserIdFromToken } from '../../../shared/utils/jwtHelper';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { Expense } from '../types/expense.types';
 
 /**
@@ -32,6 +33,7 @@ export function useRecentNotes(limit: number = 5): {
   const [recentNotes, setRecentNotes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
+  const { accessToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Memoize loadRecentNotes to ensure stable reference and proper dependency tracking
@@ -48,7 +50,7 @@ export function useRecentNotes(limit: number = 5): {
 
     try {
       setIsLoading(true);
-      const userId = getUserIdFromToken();
+      const userId = getUserIdFromToken(accessToken);
 
       if (!userId) {
         if (!currentAbortController.signal.aborted) {
@@ -116,7 +118,7 @@ export function useRecentNotes(limit: number = 5): {
         setIsLoading(false);
       }
     }
-  }, [queryClient, limit]);
+  }, [queryClient, limit, accessToken]);
 
   useEffect(() => {
     loadRecentNotes();

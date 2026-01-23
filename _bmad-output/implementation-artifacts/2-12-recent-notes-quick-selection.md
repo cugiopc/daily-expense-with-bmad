@@ -1,6 +1,6 @@
 # Story 2.12: Recent Notes Quick Selection
 
-**Status:** review
+**Status:** done
 
 **Story ID:** 2.12
 **Story Key:** 2-12-recent-notes-quick-selection
