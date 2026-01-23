@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     // DbSets
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Expense> Expenses { get; set; } = null!;
+    public DbSet<Budget> Budgets { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -137,6 +138,64 @@ public class AppDbContext : DbContext
             
             // Foreign key relationship to User entity
             // CASCADE delete: deleting user deletes all their expenses
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Budget entity configuration
+        modelBuilder.Entity<Budget>(entity =>
+        {
+            // Table name: budgets (lowercase plural)
+            entity.ToTable("budgets");
+
+            // Primary key configuration
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .HasDefaultValueSql("gen_random_uuid()");
+
+            // UserId configuration (foreign key)
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            // Month configuration (DATE column, stores first day of month)
+            entity.Property(e => e.Month)
+                .HasColumnName("month")
+                .HasColumnType("date")
+                .IsRequired()
+                .HasComment("First day of the month (e.g., 2026-01-01)");
+
+            // Amount configuration (DECIMAL 18,2 for financial data)
+            entity.Property(e => e.Amount)
+                .HasColumnName("amount")
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            // CreatedAt configuration
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // Unique constraint on (user_id, month) - one budget per user per month
+            entity.HasIndex(e => new { e.UserId, e.Month })
+                .IsUnique()
+                .HasDatabaseName("unique_user_month_budget");
+
+            // Index on user_id for "all budgets for user" queries
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("idx_budgets_user_id");
+
+            // Check constraint: Amount must be positive (AC 3.3)
+            #pragma warning disable CS0618 // Using obsolete API for compatibility with existing migration
+            entity.HasCheckConstraint("amount_positive", "amount > 0");
+            #pragma warning restore CS0618
+
+            // Foreign key relationship to User entity
+            // CASCADE delete: deleting user deletes all their budgets
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)

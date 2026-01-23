@@ -3,6 +3,7 @@ using System;
 using DailyExpenses.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DailyExpenses.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260123162626_CreateBudgetsTable")]
+    partial class CreateBudgetsTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -59,10 +62,7 @@ namespace DailyExpenses.Api.Migrations
                         .IsUnique()
                         .HasDatabaseName("unique_user_month_budget");
 
-                    b.ToTable("budgets", null, t =>
-                        {
-                            t.HasCheckConstraint("amount_positive", "amount > 0");
-                        });
+                    b.ToTable("budgets", (string)null);
                 });
 
             modelBuilder.Entity("DailyExpenses.Api.Models.Expense", b =>
