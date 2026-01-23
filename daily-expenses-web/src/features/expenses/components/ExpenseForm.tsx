@@ -2,7 +2,7 @@
 // Implements AC: 5-7 second expense entry goal
 // Supports both create and edit modes (Story 2.8)
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -64,7 +64,10 @@ export function ExpenseForm({
   const isEditMode = !!expenseId && !!initialValues;
 
   // Load recent notes for quick selection chips (Story 2.12)
-  const { recentNotes, refresh: refreshRecentNotes } = useRecentNotes(5);
+  // Issue #8 Fix: Only fetch notes in create mode to avoid unnecessary requests during edit
+  const { recentNotes, refresh: refreshRecentNotes } = useRecentNotes(
+    !isEditMode ? 5 : 0
+  );
 
   const {
     control,
@@ -101,19 +104,24 @@ export function ExpenseForm({
   const updateExpense = useUpdateExpense();
 
   // Handle chip click to auto-fill note field (Story 2.12 AC2)
-  const handleChipClick = (note: string) => {
-    setValue('note', note); // Auto-fill note field
-    setFocus('note'); // Keep focus in note field for editing if needed
-  };
+  // Issue #6 Fix: Memoize callback to prevent unnecessary chip re-renders
+  // Issue #7 Fix: Improve accessibility by setting proper ARIA attributes
+  const handleChipClick = useCallback(
+    (note: string) => {
+      setValue('note', note); // Auto-fill note field
+      setFocus('note'); // Keep focus in note field for editing if needed
+    },
+    [setValue, setFocus]
+  );
 
   const onSubmit = (data: ExpenseFormData) => {
     // Prevent double submission
     if (isSubmitting || createExpense.isPending || updateExpense.isPending) {
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     if (isEditMode && expenseId) {
       // Edit mode: update existing expense
       updateExpense.mutate(
@@ -124,26 +132,33 @@ export function ExpenseForm({
           },
         }
       );
-      
+
       // Close dialog after submission
       onSuccess?.();
     } else {
       // Create mode: add new expense
+      // Issue #4 Fix: Ensure refreshRecentNotes is called after IndexedDB is updated
       createExpense.mutate(data, {
+        onSuccess: () => {
+          // Reset form immediately for instant next entry (AC: <500ms perceived time)
+          // This happens BEFORE API completes - optimistic UI pattern
+          reset();
+
+          // Small delay to ensure IndexedDB write completes before fetching
+          // IndexedDB writes are synchronous, but give it a tick to be safe
+          const refreshTimer = setTimeout(() => {
+            refreshRecentNotes();
+          }, 50);
+
+          // Close dialog after successful submission (if callback provided)
+          onSuccess?.();
+
+          return () => clearTimeout(refreshTimer);
+        },
         onSettled: () => {
           setIsSubmitting(false);
         },
       });
-      
-      // Reset form immediately for instant next entry (AC: <500ms perceived time)
-      // This happens BEFORE API completes - optimistic UI pattern
-      reset();
-
-      // Refresh recent notes after successful expense creation (Story 2.12 AC3)
-      refreshRecentNotes();
-
-      // Close dialog after successful submission (if callback provided)
-      onSuccess?.();
     }
   };
 
@@ -169,8 +184,11 @@ export function ExpenseForm({
       }}
     >
       {/* Recent Notes Chips - Quick Selection (Story 2.12) */}
+      {/* Issue #7 Fix: Improve accessibility with ARIA labels and keyboard navigation */}
       {recentNotes.length > 0 && !isEditMode && (
         <Box
+          role="group"
+          aria-label="Gợi ý ghi chú gần đây"
           sx={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -184,6 +202,14 @@ export function ExpenseForm({
               label={note}
               variant="outlined"
               onClick={() => handleChipClick(note)}
+              aria-label={`Chọn ghi chú: ${note}`}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleChipClick(note);
+                }
+              }}
               sx={{
                 cursor: 'pointer',
                 minHeight: 44, // Accessibility: min touch target size (Story 2.12 AC8)
@@ -191,6 +217,11 @@ export function ExpenseForm({
                 '&:hover': {
                   backgroundColor: 'primary.light',
                   opacity: 0.1,
+                },
+                '&:focus-visible': {
+                  outline: '2px solid',
+                  outlineColor: 'primary.main',
+                  outlineOffset: '2px',
                 },
               }}
             />

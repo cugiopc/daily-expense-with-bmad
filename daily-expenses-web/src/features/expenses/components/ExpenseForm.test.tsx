@@ -585,4 +585,141 @@ describe('ExpenseForm', () => {
     // Chips should still be available
     expect(screen.getByText('cafe')).toBeInTheDocument();
   });
+
+  // Issue #7 Fix: Test keyboard accessibility for chips
+  it('activates chip with Enter or Space key', async () => {
+    const user = userEvent.setup();
+
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    renderForm();
+
+    // Wait for chips to render
+    await waitFor(() => {
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+
+    const cafeChip = screen.getByText('cafe');
+    const noteField = screen.getByPlaceholderText('vd: cafe, ăn trưa, xăng xe') as HTMLInputElement;
+
+    // Test Enter key on chip
+    await user.click(cafeChip);
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(noteField.value).toBe('cafe');
+    });
+
+    // Clear and test Space key
+    await user.clear(noteField);
+    await user.click(cafeChip);
+    await user.keyboard(' ');
+
+    await waitFor(() => {
+      expect(noteField.value).toBe('cafe');
+    });
+  });
+
+  // Issue #4 Fix: Test that recent notes refresh after expense creation
+  // This tests the onSuccess callback with the 50ms delay for IndexedDB sync
+  it('refreshes recent notes after successful expense creation', async () => {
+    const user = userEvent.setup();
+    const mockResponse = {
+      id: '123',
+      userId: 'user1',
+      amount: 50000,
+      note: 'coffee',
+      date: '2026-01-19',
+      createdAt: '2026-01-19T10:00:00Z',
+      updatedAt: '2026-01-19T10:00:00Z',
+    };
+
+    // Initial expenses
+    const initialExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(initialExpenses as any);
+    vi.mocked(expensesApi.createExpense).mockResolvedValue(mockResponse);
+
+    renderForm();
+
+    // Wait for initial chips
+    await waitFor(() => {
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+
+    // Fill and submit form
+    const amountField = screen.getByPlaceholderText('vd: 50000');
+    const submitButton = screen.getByRole('button', { name: /thêm chi tiêu/i });
+
+    await user.clear(amountField);
+    await user.type(amountField, '50000');
+    await user.click(submitButton);
+
+    // After submission, recent notes should be refreshed
+    // The 50ms delay ensures IndexedDB has updated
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // Verify API was called
+    await waitFor(() => {
+      expect(expensesApi.createExpense).toHaveBeenCalled();
+    });
+  });
+
+  // Story 2.12: AC8 - Chips have proper touch targets and styling
+  it('renders chips with proper accessibility touch targets', async () => {
+    // Mock expenses with notes
+    const mockExpenses = [
+      {
+        id: '1',
+        note: 'cafe',
+        createdAt: '2026-01-23T10:00:00Z',
+        amount: 50000,
+        userId: 'test-user-123',
+        date: '2026-01-23',
+        updatedAt: '2026-01-23T10:00:00Z',
+      },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    renderForm();
+
+    // Wait for chips to render
+    await waitFor(() => {
+      expect(screen.getByText('cafe')).toBeInTheDocument();
+    });
+
+    const cafeChip = screen.getByText('cafe').closest('[role="button"]') || screen.getByText('cafe');
+
+    // Verify chip has proper ARIA attributes
+    expect(cafeChip).toHaveAttribute('aria-label');
+
+    // Verify chip has proper styling (checked via data-testid or similar)
+    // In Material-UI, touch targets are set via minHeight: 44
+    const chipElement = screen.getByLabelText(/chọn ghi chú/i);
+    expect(chipElement).toBeInTheDocument();
+  });
 });

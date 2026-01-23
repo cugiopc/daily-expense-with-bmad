@@ -180,4 +180,127 @@ describe('useRecentNotes', () => {
     // Should handle error and return empty array
     expect(result.current.recentNotes).toEqual([]);
   });
+
+  // Issue #3 Fix: Test numeric date sorting instead of localeCompare
+  it('should correctly sort notes with different timestamp formats', async () => {
+    const mockExpenses = [
+      { id: '1', note: 'old', createdAt: '2026-01-20T10:00:00Z', amount: 50000, userId: 'test-user-id', date: '2026-01-20', updatedAt: '2026-01-20T10:00:00Z' },
+      { id: '2', note: 'new', createdAt: '2026-01-23T15:30:45.123Z', amount: 80000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T15:30:45.123Z' },
+      { id: '3', note: 'mid', createdAt: '2026-01-22T09:15:30Z', amount: 70000, userId: 'test-user-id', date: '2026-01-22', updatedAt: '2026-01-22T09:15:30Z' },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    const { result } = renderHook(() => useRecentNotes(5), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should sort correctly even with milliseconds in timestamp
+    expect(result.current.recentNotes).toEqual(['new', 'mid', 'old']);
+  });
+
+  // Issue #2 Fix: Test that rapid refresh calls don't cause race conditions
+  it('should handle rapid refresh calls without race conditions', async () => {
+    const mockExpenses = [
+      { id: '1', note: 'cafe', createdAt: '2026-01-23T10:00:00Z', amount: 50000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T10:00:00Z' },
+    ];
+
+    let callCount = 0;
+    vi.mocked(indexedDB.getExpenses).mockImplementation(async () => {
+      callCount++;
+      // Simulate different response times
+      await new Promise((resolve) => setTimeout(resolve, callCount * 10));
+      return mockExpenses as any;
+    });
+
+    const { result } = renderHook(() => useRecentNotes(5), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.recentNotes).toEqual(['cafe']);
+
+    // Trigger multiple rapid refreshes
+    result.current.refresh();
+    result.current.refresh();
+    result.current.refresh();
+
+    // Wait for last refresh to complete
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should have correct result from final refresh
+    expect(result.current.recentNotes).toEqual(['cafe']);
+  });
+
+  // Issue #4 Fix: Test offline scenario with IndexedDB update
+  it('should reflect new notes added to IndexedDB in real-time', async () => {
+    const initialExpenses = [
+      { id: '1', note: 'cafe', createdAt: '2026-01-23T10:00:00Z', amount: 50000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T10:00:00Z' },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(initialExpenses as any);
+
+    const { result } = renderHook(() => useRecentNotes(5), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.recentNotes).toEqual(['cafe']);
+
+    // Simulate new expense added to IndexedDB
+    const updatedExpenses = [
+      { id: '2', note: 'lunch', createdAt: '2026-01-23T12:00:00Z', amount: 80000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T12:00:00Z' },
+      ...initialExpenses,
+    ];
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(updatedExpenses as any);
+
+    // Refresh to simulate IndexedDB update
+    result.current.refresh();
+
+    await waitFor(() => {
+      expect(result.current.recentNotes).toEqual(['lunch', 'cafe']);
+    });
+  });
+
+  // Issue #5 Fix: Test proper handling of null/invalid cache data
+  it('should gracefully handle invalid cache data types', async () => {
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue([]);
+
+    // Set cache to invalid type (not an array)
+    queryClient.setQueryData(['expenses'], { invalid: 'data' });
+
+    const { result } = renderHook(() => useRecentNotes(5), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should ignore invalid cache and return empty
+    expect(result.current.recentNotes).toEqual([]);
+  });
+
+  // Test that hook respects limit=0 (for edit mode optimization)
+  it('should return empty array when limit is 0', async () => {
+    const mockExpenses = [
+      { id: '1', note: 'cafe', createdAt: '2026-01-23T10:00:00Z', amount: 50000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T10:00:00Z' },
+      { id: '2', note: 'lunch', createdAt: '2026-01-23T12:00:00Z', amount: 80000, userId: 'test-user-id', date: '2026-01-23', updatedAt: '2026-01-23T12:00:00Z' },
+    ];
+
+    vi.mocked(indexedDB.getExpenses).mockResolvedValue(mockExpenses as any);
+
+    const { result } = renderHook(() => useRecentNotes(0), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    // Should return empty when limit is 0 (used in edit mode)
+    expect(result.current.recentNotes).toEqual([]);
+  });
 });

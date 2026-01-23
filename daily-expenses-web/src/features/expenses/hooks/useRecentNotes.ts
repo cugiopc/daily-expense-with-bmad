@@ -2,7 +2,7 @@
 // Story 2.12: Recent Notes Quick Selection
 // Implements instant loading from IndexedDB with TanStack Query cache fallback
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getExpenses } from '../../../services/indexeddb';
 import { getUserIdFromToken } from '../../../shared/utils/jwtHelper';
@@ -32,14 +32,28 @@ export function useRecentNotes(limit: number = 5): {
   const [recentNotes, setRecentNotes] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const loadRecentNotes = async (): Promise<void> => {
+  // Memoize loadRecentNotes to ensure stable reference and proper dependency tracking
+  // Issue #1 Fix: Add useCallback with proper dependencies
+  // Issue #2 Fix: Add abort controller for race condition prevention
+  const loadRecentNotes = useCallback(async (): Promise<void> => {
+    // Cancel previous request if still pending
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    const currentAbortController = new AbortController();
+    abortControllerRef.current = currentAbortController;
+
     try {
       setIsLoading(true);
       const userId = getUserIdFromToken();
 
       if (!userId) {
-        setRecentNotes([]);
+        if (!currentAbortController.signal.aborted) {
+          setRecentNotes([]);
+        }
         return;
       }
 
@@ -47,9 +61,19 @@ export function useRecentNotes(limit: number = 5): {
       let expenses = await getExpenses(userId);
 
       // Fallback: Use TanStack Query cache if IndexedDB is empty
+      // Issue #5 Fix: Add proper type checking for cache data
       if (expenses.length === 0) {
-        const cachedExpenses = queryClient.getQueryData(['expenses']) as Expense[] | undefined;
-        expenses = cachedExpenses || [];
+        const cachedExpenses = queryClient.getQueryData(['expenses']);
+        if (Array.isArray(cachedExpenses)) {
+          expenses = cachedExpenses as Expense[];
+        } else {
+          expenses = [];
+        }
+      }
+
+      // Check if request was aborted before processing results
+      if (currentAbortController.signal.aborted) {
+        return;
       }
 
       // Extract unique notes, filter empties, sort by date, limit to top N
@@ -69,23 +93,41 @@ export function useRecentNotes(limit: number = 5): {
       });
 
       // Convert to array, sort by timestamp (newest first), take top N
+      // Issue #3 Fix: Use numeric date comparison instead of localeCompare
       const sortedNotes = Array.from(notesMap.entries())
-        .sort((a, b) => b[1].localeCompare(a[1])) // Sort by timestamp DESC
+        .sort((a, b) => {
+          const dateA = new Date(a[1]).getTime();
+          const dateB = new Date(b[1]).getTime();
+          return dateB - dateA; // Numeric sort, DESC (newest first)
+        })
         .slice(0, limit)
         .map(([note]) => note);
 
-      setRecentNotes(sortedNotes);
+      if (!currentAbortController.signal.aborted) {
+        setRecentNotes(sortedNotes);
+      }
     } catch (error) {
-      console.error('[useRecentNotes] Error loading recent notes:', error);
-      setRecentNotes([]);
+      if (!currentAbortController.signal.aborted) {
+        console.error('[useRecentNotes] Error loading recent notes:', error);
+        setRecentNotes([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!currentAbortController.signal.aborted) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [queryClient, limit]);
 
   useEffect(() => {
     loadRecentNotes();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Cleanup: cancel pending requests on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [loadRecentNotes]);
 
   return {
     recentNotes,
