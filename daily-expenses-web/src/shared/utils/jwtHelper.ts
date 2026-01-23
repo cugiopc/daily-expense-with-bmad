@@ -11,6 +11,9 @@
 
 interface JwtPayload {
   userId?: string;
+  sub?: string; // JWT standard subject claim
+  nameid?: string; // .NET JWT short form for NameIdentifier
+  'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'?: string; // .NET full URI
   email?: string;
   exp?: number;
   iat?: number;
@@ -51,16 +54,29 @@ export function decodeJwt(token: string): JwtPayload {
 
 /**
  * Extracts userId from JWT token
- * 
+ *
+ * Supports multiple claim formats to ensure compatibility:
+ * - 'userId' (custom field)
+ * - 'sub' (JWT standard subject claim)
+ * - 'nameid' (.NET JWT short form for ClaimTypes.NameIdentifier)
+ * - Full .NET claim type URI
+ *
  * @param token - JWT token string
  * @returns userId string or null if not found
  */
 export function getUserIdFromToken(token: string | null): string | null {
   if (!token) return null;
-  
+
   try {
     const payload = decodeJwt(token);
-    return payload.userId || null;
+    // Check all possible variations of user ID claim
+    return (
+      payload.userId ||
+      payload.sub ||
+      payload.nameid ||
+      payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
+      null
+    );
   } catch {
     return null;
   }

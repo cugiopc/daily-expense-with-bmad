@@ -54,7 +54,8 @@ export function LoginPage(): JSX.Element {
   // Demo bypass button for testing optimistic UI
   const handleDemoBypass = () => {
     // Set a mock token to bypass auth for demo
-    const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE2NzM5NzYwMDAsImV4cCI6OTk5OTk5OTk5OX0.mock-signature';
+    // Payload: {"userId":"test-user-id","email":"test@example.com","iat":1673976000,"exp":9999999999}
+    const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0LXVzZXItaWQiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE2NzM5NzYwMDAsImV4cCI6OTk5OTk5OTk5OX0.mock-signature';
     setAccessToken(mockToken);
     navigate('/');
   };
