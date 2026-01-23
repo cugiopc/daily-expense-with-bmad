@@ -23,9 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-_bmad
-_bmad-output
-
 .github
 .vscode
 
