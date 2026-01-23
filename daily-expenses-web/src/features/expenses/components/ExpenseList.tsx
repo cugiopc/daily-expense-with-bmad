@@ -25,7 +25,9 @@ import {
   Alert,
   Skeleton,
   Typography,
+  Button,
 } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useExpenses } from '../hooks/useExpenses';
 import ExpenseListGrouped from './ExpenseListGrouped';
 
@@ -40,6 +42,7 @@ export function ExpenseList() {
     isLoading,
     isError,
     error,
+    refetch,
   } = useExpenses();
 
   // Loading state - Show skeleton on initial load only
@@ -58,10 +61,23 @@ export function ExpenseList() {
     );
   }
 
-  // Error state
+  // Error state - AC7: Manual retry button
   if (isError) {
     return (
-      <Alert severity="error" sx={{ mb: 2 }}>
+      <Alert
+        severity="error"
+        sx={{ mb: 2 }}
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={() => refetch()}
+          >
+            Thử lại
+          </Button>
+        }
+      >
         {error instanceof Error ? error.message : 'Không thể tải danh sách chi tiêu'}
       </Alert>
     );

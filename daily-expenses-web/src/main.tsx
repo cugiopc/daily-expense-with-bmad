@@ -1,8 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import './index.css'
@@ -12,6 +14,7 @@ import { ErrorBoundary } from './shared/components/index.ts'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 
 // Create TanStack Query client with project-context configuration
+// AC4: localStorage persistence for cached queries (Story 2.11)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -19,9 +22,15 @@ const queryClient = new QueryClient({
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true, // AC6: Refetch when returning to page if stale
     },
   },
+})
+
+// AC4: Create localStorage persister for offline cache persistence
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'DAILY_EXPENSES_QUERY_CACHE', // Unique key for this app
 })
 
 const rootElement = document.getElementById('root')
@@ -69,7 +78,10 @@ createRoot(rootElement).render(
   <StrictMode>
     <ErrorBoundary>
       <AuthProvider>
-        <QueryClientProvider client={queryClient}>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={{ persister }}
+        >
           <BrowserRouter>
             <ThemeProvider theme={theme}>
               <CssBaseline />
@@ -77,7 +89,7 @@ createRoot(rootElement).render(
             </ThemeProvider>
           </BrowserRouter>
           <ReactQueryDevtools initialIsOpen={false} />
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </AuthProvider>
     </ErrorBoundary>
   </StrictMode>,

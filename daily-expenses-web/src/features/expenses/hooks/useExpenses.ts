@@ -55,9 +55,9 @@ export function useExpenses() {
         }));
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000, // 5 minutes - AC1
     enabled: !!userId, // Only run query if user is authenticated
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true, // Refetch when connection restored
+    // AC5 & AC6: refetchOnWindowFocus and refetchOnReconnect inherited from global config (main.tsx)
+    refetchOnReconnect: true, // AC5: Refetch when connection restored
   });
 }
