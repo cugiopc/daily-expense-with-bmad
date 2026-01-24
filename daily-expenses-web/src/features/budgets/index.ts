@@ -7,6 +7,7 @@
 
 // Components
 export { BudgetForm } from './components/BudgetForm';
+export { BudgetDisplay } from './components/BudgetDisplay';
 
 // Hooks
 export { useCreateBudget } from './hooks/useCreateBudget';

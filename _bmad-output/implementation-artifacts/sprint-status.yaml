@@ -69,7 +69,7 @@ development_status:
   epic-3: in-progress
   3-1-create-budget-entity-and-database-table: done
   3-2-set-monthly-budget-api-and-ui: review
-  3-3-display-remaining-budget: backlog
+  3-3-display-remaining-budget: review
   3-4-budget-progress-visualization: backlog
   3-5-calculate-and-display-daily-spending-average: backlog
   3-6-project-month-end-spending: backlog

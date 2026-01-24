@@ -64,6 +64,10 @@ export function useDeleteExpense(): ReturnType<typeof useMutation<void, Error, s
       // This will update totals and ensure no orphaned data
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
 
+      // Invalidate budget queries (Story 3.3: Display Remaining Budget)
+      // Budget remaining amount depends on monthly total, which changed
+      queryClient.invalidateQueries({ queryKey: ['budgets', 'current'] });
+
       // Show success toast (Vietnamese per config)
       toast.success('Đã xóa chi tiêu', {
         duration: 2000,

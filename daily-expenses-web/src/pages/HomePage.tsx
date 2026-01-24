@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Typography, Box, Container, Fab } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import { isThisMonth } from 'date-fns';
 import { AddExpenseDialog } from '../features/expenses/components/AddExpenseDialog';
 import { ExpenseList } from '../features/expenses/components/ExpenseList';
 import { TodayTotal } from '../features/expenses/components/TodayTotal';
 import { MonthlyTotal } from '../features/expenses/components/MonthlyTotal';
+import { BudgetDisplay, useCurrentBudget } from '../features/budgets';
+import { useExpenses } from '../features/expenses/hooks/useExpenses';
 import { ConnectionIndicator } from '../components/ConnectionIndicator';
 import { PendingChangesIndicator } from '../components/PendingChangesIndicator';
 import { useAutoSync } from '../hooks/useAutoSync';
@@ -12,9 +16,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserIdFromToken } from '../shared/utils/jwtHelper';
 
 export function HomePage(): JSX.Element {
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { accessToken } = useAuth();
   const userId = getUserIdFromToken(accessToken);
+
+  // Fetch budget and expenses data
+  const { data: budget } = useCurrentBudget();
+  const { data: expenses = [] } = useExpenses();
+
+  // Calculate monthly total from expenses
+  // Uses date-fns isThisMonth to handle timezone edge cases correctly (AC 6)
+  const monthlyTotal = useMemo(() => {
+    return expenses
+      .filter((expense) => isThisMonth(new Date(expense.date)))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [expenses]);
 
   // Auto-sync offline expenses when connection restores
   useAutoSync(userId || undefined);
@@ -35,6 +52,13 @@ export function HomePage(): JSX.Element {
 
           {/* Pending changes indicator */}
           <PendingChangesIndicator />
+
+          {/* Budget Display - Real-time remaining budget calculation */}
+          <BudgetDisplay
+            budget={budget || null}
+            monthlyTotal={monthlyTotal}
+            onSetBudget={() => navigate('/budget')}
+          />
 
           {/* Today and Monthly Totals - Real-time updates */}
           <TodayTotal />
