@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { HomePage, LoginPage, NotFoundPage } from './pages/index.ts'
+import { HomePage, LoginPage, BudgetPage, NotFoundPage } from './pages/index.ts'
 import { ProtectedRoute } from './components/ProtectedRoute.tsx'
 import { useAuth } from './contexts/AuthContext.tsx'
 import { apiClient } from './services/api/apiClient.ts'
@@ -24,13 +24,21 @@ export function App(): JSX.Element {
     <>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route 
-          path="/" 
+        <Route
+          path="/"
           element={
             <ProtectedRoute>
               <HomePage />
             </ProtectedRoute>
-          } 
+          }
+        />
+        <Route
+          path="/budget"
+          element={
+            <ProtectedRoute>
+              <BudgetPage />
+            </ProtectedRoute>
+          }
         />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
