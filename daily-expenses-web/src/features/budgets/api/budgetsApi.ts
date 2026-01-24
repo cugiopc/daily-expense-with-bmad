@@ -74,7 +74,6 @@ export async function getBudgets(): Promise<BudgetResponse[]> {
 
     return response.data.data;
   } catch (error: any) {
-    console.error('Get budgets error:', error);
     throw new Error(
       error.response?.data?.data?.message ||
       error.message ||
@@ -113,7 +112,6 @@ export async function getCurrentBudget(): Promise<BudgetResponse | null> {
       return null;
     }
 
-    console.error('Get current budget error:', error);
     throw new Error(
       error.response?.data?.data?.message ||
       error.message ||
