@@ -149,13 +149,12 @@ describe('BudgetForm', () => {
       { timeout: 1000 }
     );
 
-    // Verify API called with correct data
-    expect(mockCreateBudget).toHaveBeenCalledWith(
-      expect.objectContaining({
-        amount: 15000000,
-        month: expect.stringMatching(/\d{4}-\d{2}-01/),
-      })
-    );
+    // Verify API called with correct data (check first argument only)
+    const firstCallFirstArg = mockCreateBudget.mock.calls[0][0];
+    expect(firstCallFirstArg).toMatchObject({
+      amount: 15000000,
+      month: expect.stringMatching(/\d{4}-\d{2}-01/),
+    });
   });
 
   // AC: Button is disabled while submitting

@@ -13,6 +13,15 @@ import * as jwtHelper from '../../../shared/utils/jwtHelper';
 // Mock dependencies
 vi.mock('../../../services/indexeddb');
 vi.mock('../../../shared/utils/jwtHelper');
+vi.mock('../../../contexts/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    accessToken: 'mock-token',
+    user: null,
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+  })),
+}));
 
 describe('useRecentNotes', () => {
   let queryClient: QueryClient;
