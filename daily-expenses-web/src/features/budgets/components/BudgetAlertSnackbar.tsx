@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { Snackbar, Alert, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
 
 export interface BudgetAlertSnackbarProps {
   open: boolean;
   onClose: () => void;
   message: string;
-  severity: 'warning' | 'error';
+  threshold: number; // 80 or 100 - severity derived from this
 }
 
 /**
@@ -29,6 +31,7 @@ export interface BudgetAlertSnackbarProps {
  * @param onClose - Callback when snackbar should close
  * @param message - Alert message text (Vietnamese)
  * @param severity - Alert severity level (warning or error)
+ * @param threshold - Threshold percentage (80 or 100) - determines icon
  *
  * @example
  * <BudgetAlertSnackbar
@@ -36,13 +39,14 @@ export interface BudgetAlertSnackbarProps {
  *   onClose={() => setAlertOpen(false)}
  *   message="Cảnh báo ngân sách: Bạn đã dùng 80% ngân sách tháng này (12M / 15M)"
  *   severity="warning"
+ *   threshold={80}
  * />
  */
 export function BudgetAlertSnackbar({
   open,
   onClose,
   message,
-  severity,
+  threshold,
 }: BudgetAlertSnackbarProps): JSX.Element {
   // AC 14: Keyboard accessibility - Esc key dismisses snackbar
   useEffect(() => {
@@ -58,6 +62,10 @@ export function BudgetAlertSnackbar({
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [open, onClose]);
+
+  // Derive severity and icon from threshold (AC 3)
+  const severity = threshold === 100 ? 'error' : 'warning';
+  const AlertIcon = threshold === 100 ? ErrorIcon : WarningIcon;
 
   return (
     <Snackbar
@@ -76,6 +84,7 @@ export function BudgetAlertSnackbar({
         severity={severity} // warning or error (AC 3)
         role="alert" // AC 14
         aria-live="assertive" // AC 14 - immediate announcement
+        icon={<AlertIcon />} // Custom icon based on threshold
         action={
           // Manual close button (AC 5)
           <IconButton

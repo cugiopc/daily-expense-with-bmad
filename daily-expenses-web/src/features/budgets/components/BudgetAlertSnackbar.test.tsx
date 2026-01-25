@@ -29,7 +29,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Test alert message"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -45,7 +45,7 @@ describe('BudgetAlertSnackbar', () => {
           open={false}
           onClose={onClose}
           message="Test alert message"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -62,7 +62,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message={message}
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -79,7 +79,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Warning message"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -95,7 +95,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Error message"
-          severity="error"
+          threshold={100}
         />
       );
 
@@ -111,13 +111,51 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Warning"
-          severity="warning"
+          threshold={80}
         />
       );
 
       // Material-UI Alert automatically adds icon
       const alert = screen.getByRole('alert');
       expect(alert.querySelector('.MuiAlert-icon')).toBeInTheDocument();
+    });
+
+    it('should show ErrorIcon for 100% threshold (Story 3.8)', () => {
+      const onClose = vi.fn();
+
+      renderWithTheme(
+        <BudgetAlertSnackbar
+          open={true}
+          onClose={onClose}
+          message="Over budget"
+          threshold={100}
+        />
+      );
+
+      const alert = screen.getByRole('alert');
+      const icon = alert.querySelector('.MuiAlert-icon svg');
+      expect(icon).toBeInTheDocument();
+      // ErrorIcon has specific data-testid in Material-UI
+      expect(icon).toHaveAttribute('data-testid', 'ErrorIcon');
+    });
+
+    it('should show WarningIcon for 80% threshold (Story 3.7)', () => {
+      const onClose = vi.fn();
+
+      renderWithTheme(
+        <BudgetAlertSnackbar
+          open={true}
+          onClose={onClose}
+          message="Budget warning"
+          threshold={80}
+        />
+      );
+
+      const alert = screen.getByRole('alert');
+      const icon = alert.querySelector('.MuiAlert-icon svg');
+      expect(icon).toBeInTheDocument();
+      // WarningIcon has specific data-testid in Material-UI
+      expect(icon).toHaveAttribute('data-testid', 'WarningIcon');
     });
   });
 
@@ -130,7 +168,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Auto-dismiss test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -150,7 +188,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Auto-dismiss test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -178,7 +216,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Manual close test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -198,7 +236,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Close button test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -217,7 +255,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Position test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -239,7 +277,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Accessibility test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -255,7 +293,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Accessibility test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -271,7 +309,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Close button aria-label test"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -281,7 +319,7 @@ describe('BudgetAlertSnackbar', () => {
   });
 
   describe('component props', () => {
-    it('should accept and display different severity levels', () => {
+    it('should derive warning severity from 80% threshold', () => {
       const onClose = vi.fn();
 
       const { rerender } = renderWithTheme(
@@ -289,7 +327,7 @@ describe('BudgetAlertSnackbar', () => {
           open={true}
           onClose={onClose}
           message="Warning"
-          severity="warning"
+          threshold={80}
         />
       );
 
@@ -301,7 +339,7 @@ describe('BudgetAlertSnackbar', () => {
             open={true}
             onClose={onClose}
             message="Error"
-            severity="error"
+            threshold={100}
           />
         </ThemeProvider>
       );
@@ -318,10 +356,26 @@ describe('BudgetAlertSnackbar', () => {
             open={true}
             onClose={onClose}
             message="Test message"
-            severity="warning"
+            threshold={80}
           />
         );
       }).not.toThrow();
+    });
+
+    it('should display over-budget message for 100% threshold (Story 3.8)', () => {
+      const onClose = vi.fn();
+      const message = 'Vượt quá ngân sách: Bạn đã vượt quá ngân sách hàng tháng 500,000đ';
+
+      renderWithTheme(
+        <BudgetAlertSnackbar
+          open={true}
+          onClose={onClose}
+          message={message}
+          threshold={100}
+        />
+      );
+
+      expect(screen.getByText(message)).toBeInTheDocument();
     });
   });
 });

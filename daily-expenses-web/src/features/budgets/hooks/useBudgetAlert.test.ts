@@ -138,7 +138,8 @@ describe('useBudgetAlert', () => {
 
       // Message should show actual percentage (85%), not hardcoded 80%
       expect(result.current.alertMessage).toContain('85%');
-      expect(result.current.alertMessage).toMatch(/13M.*15M/);
+      expect(result.current.alertMessage).toContain('12.8M');
+      expect(result.current.alertMessage).toContain('15M');
     });
   });
 
@@ -261,6 +262,133 @@ describe('useBudgetAlert', () => {
       );
 
       expect(result.current.alertSeverity).toBe('warning');
+    });
+  });
+
+  describe('multiple thresholds (80% and 100%) - Story 3.8', () => {
+    it('should trigger 100% alert when exceeding budget', async () => {
+      const { result, rerender } = renderHook(
+        ({ budget, monthlyTotal }) => useBudgetAlert(budget, monthlyTotal),
+        {
+          initialProps: {
+            budget: mockBudget,
+            monthlyTotal: 14_999_999, // 99.99%
+          },
+        }
+      );
+
+      expect(result.current.alertOpen).toBe(false);
+
+      // Exceed budget
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 15_500_000, // 103.33%
+      });
+
+      await waitFor(() => {
+        expect(result.current.alertOpen).toBe(true);
+        expect(result.current.alertSeverity).toBe('error');
+        expect(result.current.alertThreshold).toBe(100);
+      });
+    });
+
+    it('should trigger both alerts sequentially when crossing both thresholds', async () => {
+      const { result, rerender } = renderHook(
+        ({ budget, monthlyTotal }) => useBudgetAlert(budget, monthlyTotal),
+        {
+          initialProps: {
+            budget: mockBudget,
+            monthlyTotal: 10_000_000, // 66.67%
+          },
+        }
+      );
+
+      // Cross 80% threshold first
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 12_500_000, // 83.33%
+      });
+
+      await waitFor(() => {
+        expect(result.current.alertOpen).toBe(true);
+        expect(result.current.alertSeverity).toBe('warning');
+        expect(result.current.alertThreshold).toBe(80);
+      });
+
+      // Close 80% alert
+      result.current.closeAlert();
+
+      // Cross 100% threshold
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 15_500_000, // 103.33%
+      });
+
+      await waitFor(() => {
+        expect(result.current.alertOpen).toBe(true);
+        expect(result.current.alertSeverity).toBe('error');
+        expect(result.current.alertThreshold).toBe(100);
+      });
+    });
+
+    it('should not re-trigger 100% alert when already over budget', async () => {
+      const { result, rerender } = renderHook(
+        ({ budget, monthlyTotal }) => useBudgetAlert(budget, monthlyTotal),
+        {
+          initialProps: {
+            budget: mockBudget,
+            monthlyTotal: 14_999_999,
+          },
+        }
+      );
+
+      // Cross to 103%
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 15_500_000,
+      });
+
+      await waitFor(() => {
+        expect(result.current.alertOpen).toBe(true);
+      });
+
+      // Close alert
+      result.current.closeAlert();
+
+      // Go further over budget
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 16_000_000, // 106.67%
+      });
+
+      await waitFor(() => {
+        // Should NOT re-trigger
+        expect(result.current.alertOpen).toBe(false);
+      });
+    });
+
+    it('should show over-budget message with excess amount', async () => {
+      const { result, rerender } = renderHook(
+        ({ budget, monthlyTotal }) => useBudgetAlert(budget, monthlyTotal),
+        {
+          initialProps: {
+            budget: mockBudget,
+            monthlyTotal: 14_500_000,
+          },
+        }
+      );
+
+      // Exceed by 500K
+      rerender({
+        budget: mockBudget,
+        monthlyTotal: 15_500_000,
+      });
+
+      await waitFor(() => {
+        expect(result.current.alertOpen).toBe(true);
+        expect(result.current.alertMessage).toContain('Vượt quá ngân sách');
+        expect(result.current.alertMessage).toContain('500,000đ');
+      });
     });
   });
 });

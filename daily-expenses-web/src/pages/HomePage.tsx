@@ -48,7 +48,7 @@ export function HomePage(): JSX.Element {
   }, [monthlyTotal]);
 
   // Budget alert system - triggers when crossing 80% threshold (Story 3.7)
-  const { alertOpen, alertMessage, closeAlert, alertSeverity } = useBudgetAlert(
+  const { alertOpen, alertMessage, closeAlert, alertSeverity, alertThreshold } = useBudgetAlert(
     budget || null,
     monthlyTotal
   );
@@ -120,12 +120,12 @@ export function HomePage(): JSX.Element {
       {/* Dialog opens when FAB is tapped */}
       <AddExpenseDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
 
-      {/* Budget Alert Snackbar - Shows when crossing 80% threshold (Story 3.7) */}
+      {/* Budget Alert Snackbar - Shows when crossing 80% threshold (Story 3.7) or 100% threshold (Story 3.8) */}
       <BudgetAlertSnackbar
         open={alertOpen}
         onClose={closeAlert}
         message={alertMessage}
-        severity={alertSeverity}
+        threshold={alertThreshold}
       />
     </>
   );

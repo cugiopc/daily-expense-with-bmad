@@ -1089,3 +1089,325 @@ describe('HomePage - BudgetAlert Integration (Story 3.7)', () => {
     }, { timeout: 1000 }); // AC 1: within 500ms
   });
 });
+
+// Story 3.8: Over-Budget Alert (100% threshold)
+describe('HomePage - Over-Budget Alert Integration (Story 3.8)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(jwtHelper.getUserIdFromToken).mockReturnValue('test-user-id');
+    // Clear localStorage before each test
+    localStorage.clear();
+  });
+
+  // AC 1: Alert triggers when exceeding budget (100% threshold)
+  it('should trigger over-budget alert when expense crosses 100% threshold', async () => {
+    const mockBudget = createMockBudget(15_000_000);
+    // Start at 99.99% (14,999,000)
+    const mockExpensesInitial = [createMockExpense(14_999_000, '2026-01-15T00:00:00Z')];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesInitial,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { rerender } = renderHomePage();
+
+    // No alert initially (below 100%)
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    // Add expense that crosses 100% (total = 15,500,000 = 103.33%)
+    const mockExpensesUpdated = [
+      createMockExpense(14_999_000, '2026-01-15T00:00:00Z'),
+      createMockExpense(501_000, '2026-01-16T00:00:00Z'),
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesUpdated,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Alert should appear
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
+
+  // AC 2: Alert displays correct Vietnamese message with excess amount
+  it('should display correct over-budget message with excess amount', async () => {
+    const mockBudget = createMockBudget(15_000_000);
+    const mockExpensesInitial = [createMockExpense(14_000_000, '2026-01-10T00:00:00Z')]; // 93%
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesInitial,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { rerender } = renderHomePage();
+
+    // Cross 100% threshold (total = 15,500,000, excess = 500,000)
+    const mockExpensesUpdated = [
+      createMockExpense(14_000_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(1_500_000, '2026-01-15T00:00:00Z'),
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesUpdated,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Verify Vietnamese message with "Vượt quá ngân sách" and excess amount
+    await waitFor(() => {
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      expect(alert.textContent).toMatch(/Vượt quá ngân sách.*500,000/);
+    });
+  });
+
+  // AC 3: Alert uses error severity (error icon and red color)
+  it('should display over-budget alert with error severity', async () => {
+    const mockBudget = createMockBudget(15_000_000);
+    const mockExpensesInitial = [createMockExpense(14_000_000, '2026-01-10T00:00:00Z')];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesInitial,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { rerender } = renderHomePage();
+
+    // Cross 100% threshold
+    const mockExpensesUpdated = [
+      createMockExpense(14_000_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(1_500_000, '2026-01-15T00:00:00Z'), // 15.5M = 103%
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesUpdated,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Verify error severity (ErrorIcon should be present)
+    await waitFor(() => {
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      // ErrorIcon has data-testid="ErrorIcon"
+      const errorIcon = screen.getByTestId('ErrorIcon');
+      expect(errorIcon).toBeInTheDocument();
+    });
+  });
+
+  // AC 6: Alert shows only once when crossing 100%, not on subsequent expenses
+  it('should not re-trigger over-budget alert on subsequent expense above 100%', async () => {
+    const mockBudget = createMockBudget(15_000_000);
+    const mockExpensesInitial = [createMockExpense(14_000_000, '2026-01-10T00:00:00Z')]; // 93%
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesInitial,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { rerender } = renderHomePage();
+
+    // First expense crosses 100% → alert triggers
+    const mockExpensesCrossing = [
+      createMockExpense(14_000_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(1_500_000, '2026-01-15T00:00:00Z'), // 15.5M = 103%
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesCrossing,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Alert appears
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+
+    // Close alert manually
+    const closeButton = screen.getByLabelText(/close/i);
+    closeButton.click();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    // Add another expense (now at 107%)
+    const mockExpensesSecond = [
+      createMockExpense(14_000_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(1_500_000, '2026-01-15T00:00:00Z'),
+      createMockExpense(500_000, '2026-01-16T00:00:00Z'), // 16M = 107%
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesSecond,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Alert should NOT re-appear
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  // AC 8: Alert does not trigger if no budget set
+  it('should not display over-budget alert when no budget is set', async () => {
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: null, // No budget
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const mockExpenses = [createMockExpense(20_000_000, '2026-01-10T00:00:00Z')]; // Large amount
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // No alert should appear
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+  });
+
+  // Multi-threshold: Both 80% and 100% alerts when jumping from 70% to 105%
+  it('should trigger both 80% and 100% alerts when jumping from 70% to 105%', async () => {
+    const mockBudget = createMockBudget(15_000_000);
+    const mockExpensesInitial = [createMockExpense(10_500_000, '2026-01-10T00:00:00Z')]; // 70%
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesInitial,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { rerender } = renderHomePage();
+
+    // Add large expense jumping to 105% (crosses both 80% and 100%)
+    const mockExpensesUpdated = [
+      createMockExpense(10_500_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(5_250_000, '2026-01-15T00:00:00Z'), // 15.75M = 105%
+    ];
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpensesUpdated,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <BrowserRouter>
+          <ThemeProvider theme={createTheme()}>
+            <HomePage />
+          </ThemeProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+
+    // Alert should appear (100% threshold takes precedence)
+    await waitFor(() => {
+      const alert = screen.getByRole('alert');
+      expect(alert).toBeInTheDocument();
+      // Should show over-budget message (100% threshold), not 80% warning
+      expect(alert.textContent).toMatch(/Vượt quá ngân sách.*750,000/);
+      // Should have ErrorIcon (100% threshold)
+      expect(screen.getByTestId('ErrorIcon')).toBeInTheDocument();
+    });
+  });
+});
