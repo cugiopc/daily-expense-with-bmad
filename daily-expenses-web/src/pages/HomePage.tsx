@@ -7,7 +7,7 @@ import { AddExpenseDialog } from '../features/expenses/components/AddExpenseDial
 import { ExpenseList } from '../features/expenses/components/ExpenseList';
 import { TodayTotal } from '../features/expenses/components/TodayTotal';
 import { MonthlyTotal } from '../features/expenses/components/MonthlyTotal';
-import { BudgetDisplay, BudgetProgress, useCurrentBudget } from '../features/budgets';
+import { BudgetDisplay, BudgetProgress, DailyAverage, useCurrentBudget } from '../features/budgets';
 import { useExpenses } from '../features/expenses/hooks/useExpenses';
 import { ConnectionIndicator } from '../components/ConnectionIndicator';
 import { PendingChangesIndicator } from '../components/PendingChangesIndicator';
@@ -62,6 +62,9 @@ export function HomePage(): JSX.Element {
 
           {/* Budget Progress Bar - Visual progress indicator for budget usage */}
           <BudgetProgress budget={budget || null} monthlyTotal={monthlyTotal} />
+
+          {/* Daily Spending Average - Shows spending pace for the month */}
+          <DailyAverage monthlyTotal={monthlyTotal} />
 
           {/* Today and Monthly Totals - Real-time updates */}
           <TodayTotal />

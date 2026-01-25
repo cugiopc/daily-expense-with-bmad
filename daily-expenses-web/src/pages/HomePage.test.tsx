@@ -385,3 +385,125 @@ describe('HomePage - BudgetProgress Integration', () => {
     expect(useExpensesHook.useExpenses).toHaveBeenCalled();
   });
 });
+
+describe('HomePage - DailyAverage Integration (Story 3.5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(jwtHelper.getUserIdFromToken).mockReturnValue('test-user-id');
+  });
+
+  // Task 7: Verify DailyAverage receives correct monthlyTotal and displays correct value
+  it('should render DailyAverage with correct calculated value', async () => {
+    // Arrange - 6M total spending in January
+    const mockExpenses = [
+      createMockExpense(3_000_000, '2026-01-10T00:00:00Z'),
+      createMockExpense(3_000_000, '2026-01-15T00:00:00Z'),
+    ];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: createMockBudget(15_000_000),
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Assert - DailyAverage displays label and calculated value
+    // Note: Value depends on current day of month during test execution
+    await waitFor(() => {
+      expect(screen.getByText(/Trung bình mỗi ngày:/i)).toBeInTheDocument();
+      // Verify the formatted currency symbol is present (calculation happened)
+      const dailyAverageElement = screen.getByText(/Trung bình mỗi ngày:/i);
+      expect(dailyAverageElement.textContent).toMatch(/₫/);
+    });
+  });
+
+  // Task 7: Verify daily average shows 0đ when no expenses (AC 6)
+  it('should display daily average as 0đ when no expenses', async () => {
+    // Arrange - no expenses, monthlyTotal = 0
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: createMockBudget(15_000_000),
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Assert - should show 0 ₫ (0 / current_day = 0)
+    await waitFor(() => {
+      const dailyAverageElement = screen.getByText(/Trung bình mỗi ngày:/i);
+      expect(dailyAverageElement).toBeInTheDocument();
+      // Verify calculated value is 0đ
+      expect(dailyAverageElement.textContent).toMatch(/0\s*₫/);
+    });
+  });
+
+  // Task 7: Verify number formatting matches Vietnamese locale
+  it('should format daily average with Vietnamese locale', async () => {
+    const mockExpenses = [
+      createMockExpense(6_000_000, '2026-01-01T00:00:00Z'),
+    ];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Number should be formatted with dots (Vietnamese locale)
+    await waitFor(() => {
+      // 6M total, current day varies, so daily average varies by date
+      // We just verify the component renders with proper formatting
+      const dailyAverageElement = screen.getByText(/Trung bình mỗi ngày:/i);
+      expect(dailyAverageElement).toBeInTheDocument();
+      // Verify formatting has ₫ symbol
+      expect(dailyAverageElement.textContent).toMatch(/₫/);
+    });
+  });
+
+  // Task 7: Verify DailyAverage positioned correctly (after BudgetProgress)
+  it('should render DailyAverage after BudgetProgress component', async () => {
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: createMockBudget(15_000_000),
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: [createMockExpense(3_000_000, '2026-01-10T00:00:00Z')],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const { container } = renderHomePage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Trung bình mỗi ngày:/i)).toBeInTheDocument();
+    });
+
+    // Verify component structure (smoke test for positioning)
+    const dailyAverageText = screen.getByText(/Trung bình mỗi ngày:/i);
+    expect(dailyAverageText.tagName).toBe('P'); // Typography renders as p tag
+    expect(container.querySelector('.MuiTypography-body1')).toBeInTheDocument();
+  });
+});

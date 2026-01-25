@@ -9,6 +9,7 @@
 export { BudgetForm } from './components/BudgetForm';
 export { BudgetDisplay } from './components/BudgetDisplay';
 export { BudgetProgress } from './components/BudgetProgress';
+export { DailyAverage } from './components/DailyAverage';
 
 // Hooks
 export { useCreateBudget } from './hooks/useCreateBudget';
