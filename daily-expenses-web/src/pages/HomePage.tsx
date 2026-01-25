@@ -7,8 +7,16 @@ import { AddExpenseDialog } from '../features/expenses/components/AddExpenseDial
 import { ExpenseList } from '../features/expenses/components/ExpenseList';
 import { TodayTotal } from '../features/expenses/components/TodayTotal';
 import { MonthlyTotal } from '../features/expenses/components/MonthlyTotal';
-import { BudgetDisplay, BudgetProgress, DailyAverage, MonthEndProjection, useCurrentBudget } from '../features/budgets';
+import {
+  BudgetDisplay,
+  BudgetProgress,
+  DailyAverage,
+  MonthEndProjection,
+  BudgetAlertSnackbar,
+  useCurrentBudget,
+} from '../features/budgets';
 import { calculateDailyAverage } from '../features/budgets/utils/calculateDailyAverage';
+import { useBudgetAlert } from '../features/budgets/hooks/useBudgetAlert';
 import { useExpenses } from '../features/expenses/hooks/useExpenses';
 import { ConnectionIndicator } from '../components/ConnectionIndicator';
 import { PendingChangesIndicator } from '../components/PendingChangesIndicator';
@@ -38,6 +46,12 @@ export function HomePage(): JSX.Element {
   const dailyAverage = useMemo(() => {
     return calculateDailyAverage(monthlyTotal, new Date());
   }, [monthlyTotal]);
+
+  // Budget alert system - triggers when crossing 80% threshold (Story 3.7)
+  const { alertOpen, alertMessage, closeAlert, alertSeverity } = useBudgetAlert(
+    budget || null,
+    monthlyTotal
+  );
 
   // Auto-sync offline expenses when connection restores
   useAutoSync(userId || undefined);
@@ -105,6 +119,14 @@ export function HomePage(): JSX.Element {
 
       {/* Dialog opens when FAB is tapped */}
       <AddExpenseDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+
+      {/* Budget Alert Snackbar - Shows when crossing 80% threshold (Story 3.7) */}
+      <BudgetAlertSnackbar
+        open={alertOpen}
+        onClose={closeAlert}
+        message={alertMessage}
+        severity={alertSeverity}
+      />
     </>
   );
 }

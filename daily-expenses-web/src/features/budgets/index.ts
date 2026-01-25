@@ -11,6 +11,7 @@ export { BudgetDisplay } from './components/BudgetDisplay';
 export { BudgetProgress } from './components/BudgetProgress';
 export { DailyAverage } from './components/DailyAverage';
 export { MonthEndProjection } from './components/MonthEndProjection';
+export { BudgetAlertSnackbar } from './components/BudgetAlertSnackbar';
 
 // Hooks
 export { useCreateBudget } from './hooks/useCreateBudget';
