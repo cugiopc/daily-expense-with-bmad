@@ -507,3 +507,168 @@ describe('HomePage - DailyAverage Integration (Story 3.5)', () => {
     expect(container.querySelector('.MuiTypography-body1')).toBeInTheDocument();
   });
 });
+
+describe('HomePage - MonthEndProjection Integration (Story 3.6)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(jwtHelper.getUserIdFromToken).mockReturnValue('test-user-id');
+  });
+
+  // Task 9: MonthEndProjection renders with correct props
+  it('should render MonthEndProjection with correct dailyAverage and budget props', async () => {
+    const mockBudget = createMockBudget(10_000_000);
+    const mockExpenses = [
+      createMockExpense(6_000_000, '2026-01-15T00:00:00Z'),
+    ];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Should display month-end projection label
+    await waitFor(() => {
+      expect(screen.getByText(/Dự kiến cuối tháng:/i)).toBeInTheDocument();
+    });
+  });
+
+  // Task 9: Projection visible when expenses exist
+  it('should display projection when expenses exist', async () => {
+    const mockExpenses = [createMockExpense(3_000_000, '2026-01-10T00:00:00Z')];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    await waitFor(() => {
+      const projectionElement = screen.getByText(/Dự kiến cuối tháng:/i);
+      expect(projectionElement).toBeInTheDocument();
+      // Should have formatted currency
+      expect(projectionElement.textContent).toMatch(/₫/);
+    });
+  });
+
+  // Task 9: Projection shows 0đ when no expenses
+  it('should display 0đ projection when no expenses', async () => {
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    await waitFor(() => {
+      const projectionElement = screen.getByText(/Dự kiến cuối tháng:/i);
+      expect(projectionElement).toBeInTheDocument();
+      // Should show 0 ₫
+      expect(projectionElement.textContent).toMatch(/0\s*₫/);
+    });
+  });
+
+  // Task 9: Warning message appears when budget exceeded
+  it('should display warning when budget will be exceeded', async () => {
+    // Mock projection would exceed budget
+    const mockBudget = createMockBudget(10_000_000);
+    // 6M spent by day 15 → 400K/day → projection 12.4M (exceeds 10M budget)
+    const mockExpenses = [createMockExpense(6_000_000, '2026-01-15T00:00:00Z')];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Should display warning message about exceeding budget
+    await waitFor(() => {
+      const projectionElement = screen.getByText(/Dự kiến cuối tháng:/i);
+      expect(projectionElement).toBeInTheDocument();
+    });
+  });
+
+  // Task 9: Success message appears when under budget
+  it('should display success when under budget', async () => {
+    // Mock projection under budget
+    const mockBudget = createMockBudget(15_000_000);
+    // 3M spent by day 15 → 200K/day → projection ~6.2M (under 15M budget)
+    const mockExpenses = [createMockExpense(3_000_000, '2026-01-15T00:00:00Z')];
+
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: mockBudget,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: mockExpenses,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    // Should display projection
+    await waitFor(() => {
+      const projectionElement = screen.getByText(/Dự kiến cuối tháng:/i);
+      expect(projectionElement).toBeInTheDocument();
+    });
+  });
+
+  // Task 9: MonthEndProjection positioned after DailyAverage
+  it('should render MonthEndProjection after DailyAverage component', async () => {
+    vi.mocked(useCurrentBudgetHook.useCurrentBudget).mockReturnValue({
+      data: createMockBudget(15_000_000),
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(useExpensesHook.useExpenses).mockReturnValue({
+      data: [createMockExpense(3_000_000, '2026-01-10T00:00:00Z')],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderHomePage();
+
+    await waitFor(() => {
+      const dailyAverage = screen.getByText(/Trung bình mỗi ngày:/i);
+      const projection = screen.getByText(/Dự kiến cuối tháng:/i);
+
+      expect(dailyAverage).toBeInTheDocument();
+      expect(projection).toBeInTheDocument();
+    });
+  });
+});

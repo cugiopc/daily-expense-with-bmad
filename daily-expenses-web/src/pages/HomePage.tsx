@@ -7,7 +7,8 @@ import { AddExpenseDialog } from '../features/expenses/components/AddExpenseDial
 import { ExpenseList } from '../features/expenses/components/ExpenseList';
 import { TodayTotal } from '../features/expenses/components/TodayTotal';
 import { MonthlyTotal } from '../features/expenses/components/MonthlyTotal';
-import { BudgetDisplay, BudgetProgress, DailyAverage, useCurrentBudget } from '../features/budgets';
+import { BudgetDisplay, BudgetProgress, DailyAverage, MonthEndProjection, useCurrentBudget } from '../features/budgets';
+import { calculateDailyAverage } from '../features/budgets/utils/calculateDailyAverage';
 import { useExpenses } from '../features/expenses/hooks/useExpenses';
 import { ConnectionIndicator } from '../components/ConnectionIndicator';
 import { PendingChangesIndicator } from '../components/PendingChangesIndicator';
@@ -32,6 +33,11 @@ export function HomePage(): JSX.Element {
       .filter((expense) => isThisMonth(new Date(expense.date)))
       .reduce((sum, expense) => sum + expense.amount, 0);
   }, [expenses]);
+
+  // Calculate daily average for month-end projection
+  const dailyAverage = useMemo(() => {
+    return calculateDailyAverage(monthlyTotal, new Date());
+  }, [monthlyTotal]);
 
   // Auto-sync offline expenses when connection restores
   useAutoSync(userId || undefined);
@@ -65,6 +71,9 @@ export function HomePage(): JSX.Element {
 
           {/* Daily Spending Average - Shows spending pace for the month */}
           <DailyAverage monthlyTotal={monthlyTotal} />
+
+          {/* Month-End Projection - Projected spending by month end based on daily average */}
+          <MonthEndProjection dailyAverage={dailyAverage} budget={budget?.amount || null} />
 
           {/* Today and Monthly Totals - Real-time updates */}
           <TodayTotal />
