@@ -74,7 +74,7 @@ development_status:
   3-5-calculate-and-display-daily-spending-average: done
   3-6-project-month-end-spending: done
   3-7-budget-alert-at-80-threshold: done
-  3-8-budget-alert-when-over-budget: review
+  3-8-budget-alert-when-over-budget: done
   epic-3-retrospective: optional
 
   # Epic 4: Savings Goal Tracking

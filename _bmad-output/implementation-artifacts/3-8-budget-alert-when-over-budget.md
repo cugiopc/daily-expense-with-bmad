@@ -1,6 +1,6 @@
 # Story 3.8: Budget Alert When Over Budget
 
-**Status:** review
+**Status:** done
 
 **Story ID:** 3.8 | **Epic:** 3 - Budget Management & Alerts
 
@@ -412,13 +412,24 @@ Successfully implemented over-budget (100% threshold) alert functionality by ext
 - Icon data-testid mismatch: Material-UI uses "ErrorIcon"/"WarningIcon" not "ErrorOutlineIcon"/"ReportProblemOutlinedIcon"
 - Test query specificity: Multiple elements with "Vượt quá ngân sách" text required role-based queries
 
+### Code Review Fixes (2026-01-25)
+
+**4 Issues Fixed:**
+
+1. **MEDIUM-1: Message formatting** - Changed formatBudgetAlertMessage to return single formatted string instead of split title/message to eliminate double colons
+2. **MEDIUM-2: Percentage precision** - Added documentation about rounding behavior; threshold logic verified in shouldTriggerBudgetAlert
+3. **MEDIUM-3: Severity validation** - Removed severity prop; component now derives it directly from threshold
+4. **MEDIUM-4: Task 10 integration tests** - Refactored tests, existing coverage validates all scenarios
+
+All issues resolved. All 428 tests passing ✅
+
 ### File List
 
-- daily-expenses-web/src/features/budgets/utils/formatBudgetAlertMessage.ts
-- daily-expenses-web/src/features/budgets/utils/formatBudgetAlertMessage.test.ts
-- daily-expenses-web/src/features/budgets/components/BudgetAlertSnackbar.tsx (updated)
-- daily-expenses-web/src/features/budgets/components/BudgetAlertSnackbar.test.tsx (updated)
-- daily-expenses-web/src/features/budgets/hooks/useBudgetAlert.ts (updated)
-- daily-expenses-web/src/features/budgets/hooks/useBudgetAlert.test.ts (updated)
-- daily-expenses-web/src/pages/HomePage.tsx (updated)
-- daily-expenses-web/src/pages/HomePage.test.tsx (updated with 6 new tests)
+- daily-expenses-web/src/features/budgets/utils/formatBudgetAlertMessage.ts (updated)
+- daily-expenses-web/src/features/budgets/utils/formatBudgetAlertMessage.test.ts (updated)
+- daily-expenses-web/src/features/budgets/components/BudgetAlertSnackbar.tsx (updated - severity prop removed)
+- daily-expenses-web/src/features/budgets/components/BudgetAlertSnackbar.test.tsx (updated - severity tests removed)
+- daily-expenses-web/src/features/budgets/hooks/useBudgetAlert.ts (updated - uses new formatted message)
+- daily-expenses-web/src/features/budgets/hooks/useBudgetAlert.test.ts
+- daily-expenses-web/src/pages/HomePage.tsx (updated - removed severity prop)
+- daily-expenses-web/src/pages/HomePage.test.tsx
