@@ -3389,39 +3389,74 @@ docker build -t dailyexpenses-api .
 
 #### Deployment Structure
 
-**Frontend Deployment (Vercel/Netlify):**
-1. Connect GitHub repository
-2. Configure build command: `npm run build`
-3. Configure output directory: `dist`
-4. Set environment variables: `VITE_API_URL`
-5. Enable automatic deployments on push
-6. Preview deployments for pull requests
+**SELECTED DEPLOYMENT STACK: Vercel (Frontend) + Railway (Backend) + Supabase (Database)**
 
-**Backend Deployment (Railway/Render):**
-1. Connect GitHub repository
-2. Configure Dockerfile or buildpack
+**Cost Estimate:** $0-5/month for MVP (Free tier usage)
+- **Frontend (Vercel):** Free tier - 100GB bandwidth, HTTPS, CDN global
+- **Backend (Railway):** $5 credit/month free trial - sufficient for hobby project
+- **Database (Supabase):** Free tier - 500MB PostgreSQL, unlimited API requests
+
+**Frontend Deployment (Vercel Free Tier):**
+1. Connect GitHub repository to Vercel
+2. Configure build settings:
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - Node version: 18.x
 3. Set environment variables:
-   - `ConnectionStrings__DefaultConnection`
-   - `Jwt__Secret`
-4. Enable automatic deployments
-5. Run migrations on deployment
-6. Health check endpoint: `/api/health`
+   - `VITE_API_URL` = Railway backend URL
+4. Enable automatic deployments on push to main branch
+5. Preview deployments for pull requests
+6. Custom domain (optional): dailyexpenses.vercel.app
 
-**Database Deployment:**
-1. Provision managed PostgreSQL (Railway/Render/Supabase)
-2. Note connection string
-3. Configure backend environment variable
-4. Run initial migrations
-5. Enable automatic backups
+**Backend Deployment (Railway - $5 Credit/Month):**
+1. Connect GitHub repository to Railway
+2. Configure service settings:
+   - Root directory: `DailyExpenses.Api`
+   - Build command: `dotnet publish -c Release`
+   - Start command: `dotnet DailyExpenses.Api.dll`
+3. Set environment variables:
+   - `ConnectionStrings__DefaultConnection` = Supabase PostgreSQL connection string
+   - `Jwt__Secret` = Generate secure random string (min 32 chars)
+   - `Jwt__Issuer` = Railway app domain
+   - `Jwt__Audience` = Vercel frontend domain
+   - `ASPNETCORE_ENVIRONMENT` = Production
+4. Enable automatic deployments on push
+5. Run migrations: `dotnet ef database update` (post-deploy hook)
+6. Health check endpoint: `https://<railway-domain>/api/health`
+7. **Note:** Railway free trial provides always-on service (no cold starts)
+
+**Database Deployment (Supabase Free Tier):**
+1. Create new Supabase project: dailyexpenses
+2. Region: Select closest to target users (for Vietnam: Singapore)
+3. Retrieve connection string from Project Settings > Database
+4. Connection string format:
+   ```
+   postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres
+   ```
+5. Configure Railway backend with connection string
+6. Run initial migrations from local:
+   ```bash
+   dotnet ef database update --connection "<supabase-connection-string>"
+   ```
+7. Enable automatic backups (included in free tier)
+8. Monitor database size (500MB limit - sufficient for 50K+ expense records)
+
+**Upgrade Path (When Needed):**
+- **Railway Hobby Plan ($10/month):** When traffic increases or need guaranteed uptime
+- **Supabase Pro ($25/month):** Only if database exceeds 500MB (unlikely for single-user MVP)
+- **Vercel Pro ($20/month):** Only if exceeding 100GB bandwidth (very unlikely)
 
 **Deployment Checklist:**
-- [ ] Environment variables configured
-- [ ] Database migrations applied
-- [ ] CORS configured for frontend domain
-- [ ] JWT secret set (production)
-- [ ] HTTPS enabled
-- [ ] Error tracking configured (optional)
-- [ ] Performance monitoring (optional)
+- [ ] **Supabase:** Create project and retrieve connection string
+- [ ] **Railway:** Connect repo, set environment variables (DB connection, JWT secret)
+- [ ] **Railway:** Run database migrations: `dotnet ef database update`
+- [ ] **Vercel:** Connect repo, set VITE_API_URL to Railway backend URL
+- [ ] **CORS:** Configure Railway backend to allow Vercel domain origin
+- [ ] **JWT Secret:** Generate secure 32+ character random string for Railway
+- [ ] **HTTPS:** Verify both Vercel and Railway provide HTTPS by default
+- [ ] **Health Check:** Test Railway endpoint `/api/health` returns 200 OK
+- [ ] **Frontend Test:** Verify Vercel deployment can authenticate and fetch data
+- [ ] **Backup:** Confirm Supabase automatic backups are enabled (default on free tier)
 
 ---
 
