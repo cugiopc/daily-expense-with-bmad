@@ -10,15 +10,20 @@ import { useAuthInit } from './hooks/useAuthInit.ts'
 import './App.css'
 
 export function App(): JSX.Element {
-  const authContext = useAuth()
+  const { accessToken, setAccessToken } = useAuth()
 
   // Initialize session restoration on app mount
   useAuthInit()
 
   // Setup axios interceptors when app mounts
   useEffect(() => {
-    setupInterceptors(apiClient, authContext)
-  }, [authContext])
+    // Pass getter function to avoid stale closure over accessToken
+    setupInterceptors(
+      apiClient, 
+      () => accessToken,
+      setAccessToken
+    )
+  }, [accessToken, setAccessToken])
 
   return (
     <>

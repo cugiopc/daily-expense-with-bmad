@@ -22,13 +22,15 @@ Object.defineProperty(window, 'location', {
 });
 
 // Mock auth context
-const createMockAuthContext = (initialToken: string | null = 'initial-token') => ({
-  accessToken: initialToken,
-  setAccessToken: vi.fn((token: string | null) => {
-    mockAuthContext.accessToken = token;
-  }),
-  isAuthenticated: !!initialToken,
-});
+const createMockAuthContext = (initialToken: string | null = 'initial-token') => {
+  let currentToken = initialToken;
+  return {
+    getAccessToken: () => currentToken,
+    setAccessToken: vi.fn((token: string | null) => {
+      currentToken = token;
+    }),
+  };
+};
 
 let mockAuthContext: ReturnType<typeof createMockAuthContext>;
 
@@ -37,7 +39,11 @@ const createAxiosInstanceWithInterceptors = () => {
   const instance = axios.create({
     baseURL: 'http://localhost:5000',
   });
-  setupInterceptors(instance, mockAuthContext);
+  setupInterceptors(
+    instance, 
+    mockAuthContext.getAccessToken,
+    mockAuthContext.setAccessToken
+  );
   return instance;
 };
 
@@ -74,7 +80,7 @@ describe('axiosInterceptor', () => {
 
       // The instance should add the Authorization header
       // We can verify by checking the request interceptor added it
-      expect(mockAuthContext.accessToken).toBe('initial-token');
+      expect(mockAuthContext.getAccessToken()).toBe('initial-token');
     });
 
     it('does not add Authorization header when access token is null', () => {
@@ -82,8 +88,7 @@ describe('axiosInterceptor', () => {
       const instance = createAxiosInstanceWithInterceptors();
       
       // Verify context has no token
-      expect(mockAuthContext.accessToken).toBeNull();
-      expect(mockAuthContext.isAuthenticated).toBe(false);
+      expect(mockAuthContext.getAccessToken()).toBeNull();
     });
   });
 

@@ -29,6 +29,12 @@ interface AuthContextType {
 }
 
 /**
+ * Token getter function type.
+ * Returns the current access token dynamically to avoid stale closures.
+ */
+type GetAccessToken = () => string | null;
+
+/**
  * Strongly typed callback for successful token refresh.
  * Called with the new access token when refresh completes successfully.
  */
@@ -91,14 +97,20 @@ const processQueue = (error: Error | null, token: string | null = null): void =>
  *   - Retries failed requests with new token after successful refresh
  * 
  * @param axiosInstance - The axios instance to configure
- * @param authContext - The auth context containing token state and setters
+ * @param getAccessToken - Function to get current access token (avoids stale closure)
+ * @param setAccessToken - Function to update access token after refresh
  */
-export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: AuthContextType): void => {
+export const setupInterceptors = (
+  axiosInstance: AxiosInstance, 
+  getAccessToken: GetAccessToken,
+  setAccessToken: (token: string | null) => void
+): void => {
   // Request interceptor - add Authorization header to all requests
   axiosInstance.interceptors.request.use(
     (config) => {
-      if (authContext.accessToken) {
-        config.headers.Authorization = `Bearer ${authContext.accessToken}`;
+      const token = getAccessToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
     },
@@ -152,7 +164,7 @@ export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: Aut
           const newAccessToken = response.data.data.accessToken;
 
           // Update access token in auth context (stored in memory)
-          authContext.setAccessToken(newAccessToken);
+          setAccessToken(newAccessToken);
 
           // Process all queued requests with the new token
           processQueue(null, newAccessToken);
@@ -166,7 +178,7 @@ export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: Aut
           processQueue(refreshError as Error, null);
           
           // Clear auth state
-          authContext.setAccessToken(null);
+          setAccessToken(null);
           
           // Redirect to login page
           window.location.href = '/login';
