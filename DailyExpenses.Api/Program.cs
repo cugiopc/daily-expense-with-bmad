@@ -3,6 +3,7 @@ using DailyExpenses.Api.Data;
 using DailyExpenses.Api.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -138,6 +139,12 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+// Trust proxy headers from Railway/cloud providers (HTTPS forwarding)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
+});
 
 // Only use HTTPS redirection in Development
 // In Production (Railway/cloud), the proxy/edge handles HTTPS termination

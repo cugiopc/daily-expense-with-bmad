@@ -182,8 +182,8 @@ public class AuthController : ControllerBase
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true, // Prevents JavaScript access (XSS protection)
-            Secure = HttpContext.Request.IsHttps, // HTTPS only when request is secure
-            SameSite = SameSiteMode.Strict, // CSRF protection
+            Secure = true, // Always require HTTPS in production (Railway/Vercel)
+            SameSite = SameSiteMode.None, // Required for cross-origin requests (Vercel → Railway)
             Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenExpirationDays)
         };
 
