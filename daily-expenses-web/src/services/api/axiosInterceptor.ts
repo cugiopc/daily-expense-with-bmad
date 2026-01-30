@@ -29,6 +29,12 @@ interface AuthContextType {
 }
 
 /**
+ * Type for auth context getter function.
+ * This allows interceptor to always read the latest auth state without re-initialization.
+ */
+type AuthContextGetter = () => AuthContextType;
+
+/**
  * Strongly typed callback for successful token refresh.
  * Called with the new access token when refresh completes successfully.
  */
@@ -81,22 +87,28 @@ const processQueue = (error: Error | null, token: string | null = null): void =>
 
 /**
  * Sets up request and response interceptors on an axios instance.
- * 
+ *
+ * CRITICAL FIX: Uses getter function pattern to access latest auth state.
+ * This prevents race conditions where interceptor setup depends on changing authContext object.
+ *
  * Request Interceptor:
  *   - Automatically adds Authorization header if access token exists
- * 
+ *   - Reads latest token state on each request (no stale closure)
+ *
  * Response Interceptor:
  *   - Catches 401 errors and attempts token refresh
  *   - Queues concurrent requests during refresh to prevent race conditions
  *   - Retries failed requests with new token after successful refresh
- * 
+ *
  * @param axiosInstance - The axios instance to configure
- * @param authContext - The auth context containing token state and setters
+ * @param getAuthContext - Function that returns the current auth context (always fresh)
  */
-export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: AuthContextType): void => {
+export const setupInterceptors = (axiosInstance: AxiosInstance, getAuthContext: AuthContextGetter): void => {
   // Request interceptor - add Authorization header to all requests
+  // CRITICAL: Call getAuthContext() on EVERY request to get latest token
   axiosInstance.interceptors.request.use(
     (config) => {
+      const authContext = getAuthContext();
       if (authContext.accessToken) {
         config.headers.Authorization = `Bearer ${authContext.accessToken}`;
       }
@@ -152,6 +164,8 @@ export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: Aut
           const newAccessToken = response.data.data.accessToken;
 
           // Update access token in auth context (stored in memory)
+          // Get latest auth context before updating
+          const authContext = getAuthContext();
           authContext.setAccessToken(newAccessToken);
 
           // Process all queued requests with the new token
@@ -164,13 +178,14 @@ export const setupInterceptors = (axiosInstance: AxiosInstance, authContext: Aut
           // Refresh failed - token is invalid/expired, user must log in again
           // Reject all queued requests since they can't succeed without valid token
           processQueue(refreshError as Error, null);
-          
+
           // Clear auth state
+          const authContext = getAuthContext();
           authContext.setAccessToken(null);
-          
+
           // Redirect to login page
           window.location.href = '/login';
-          
+
           return Promise.reject(refreshError);
         } finally {
           // Always reset the refreshing flag, whether success or failure

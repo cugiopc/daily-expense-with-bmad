@@ -15,10 +15,13 @@ export function App(): JSX.Element {
   // Initialize session restoration on app mount
   useAuthInit()
 
-  // Setup axios interceptors when app mounts
+  // Setup axios interceptors ONCE when app mounts
+  // CRITICAL FIX: Use empty deps to prevent re-initialization on every auth state change
+  // Pass getter function instead of authContext object to always read latest state
   useEffect(() => {
-    setupInterceptors(apiClient, authContext)
-  }, [authContext])
+    setupInterceptors(apiClient, () => authContext)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>

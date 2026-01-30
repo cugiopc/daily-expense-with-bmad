@@ -37,7 +37,8 @@ const createAxiosInstanceWithInterceptors = () => {
   const instance = axios.create({
     baseURL: 'http://localhost:5000',
   });
-  setupInterceptors(instance, mockAuthContext);
+  // Pass getter function to always read latest mockAuthContext state
+  setupInterceptors(instance, () => mockAuthContext);
   return instance;
 };
 
