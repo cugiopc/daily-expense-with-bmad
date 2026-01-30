@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { HomePage, LoginPage, BudgetPage, NotFoundPage } from './pages/index.ts'
@@ -12,14 +12,23 @@ import './App.css'
 export function App(): JSX.Element {
   const authContext = useAuth()
 
+  // CRITICAL FIX: Use ref to track latest auth context without triggering re-renders
+  // Refs are mutable and persist across renders, preventing stale closure issues
+  const authContextRef = useRef(authContext)
+
+  // Update ref whenever authContext changes
+  useEffect(() => {
+    authContextRef.current = authContext
+  }, [authContext])
+
   // Initialize session restoration on app mount
   useAuthInit()
 
   // Setup axios interceptors ONCE when app mounts
-  // CRITICAL FIX: Use empty deps to prevent re-initialization on every auth state change
-  // Pass getter function instead of authContext object to always read latest state
+  // CRITICAL: Pass getter that reads from ref, not closure variable
+  // This ensures interceptor always gets the LATEST auth state
   useEffect(() => {
-    setupInterceptors(apiClient, () => authContext)
+    setupInterceptors(apiClient, () => authContextRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
