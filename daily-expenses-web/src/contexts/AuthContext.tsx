@@ -62,9 +62,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // See module-level JSDoc for detailed security rationale
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  // DEBUG: Wrapper to log token changes
+  const setAccessTokenWithLogging = (token: string | null) => {
+    console.log('[AuthContext] Token changing from:', accessToken?.substring(0, 20), 'to:', token?.substring(0, 20));
+    setAccessToken(token);
+  };
+
   const value: AuthContextType = {
     accessToken,
-    setAccessToken,
+    setAccessToken: setAccessTokenWithLogging,
     isAuthenticated: !!accessToken,
   };
 

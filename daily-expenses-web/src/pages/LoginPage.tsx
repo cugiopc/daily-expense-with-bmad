@@ -39,7 +39,10 @@ export function LoginPage(): JSX.Element {
       });
 
       if (response.data?.success && response.data?.data?.accessToken) {
-        setAccessToken(response.data.data.accessToken);
+        const token = response.data.data.accessToken;
+        console.log('[LoginPage] ✅ Login successful, token received:', token.substring(0, 20) + '...');
+        setAccessToken(token);
+        console.log('[LoginPage] Token set in context');
         navigate('/');
       } else {
         setError('Đăng nhập thất bại');
