@@ -110,16 +110,8 @@ export const setupInterceptors = (axiosInstance: AxiosInstance, getAuthContext: 
     (config) => {
       const authContext = getAuthContext();
 
-      // DEBUG: Log token state (remove in production)
-      console.log('[Interceptor] Request to:', config.url);
-      console.log('[Interceptor] Has token:', !!authContext.accessToken);
-      console.log('[Interceptor] Token (first 20 chars):', authContext.accessToken?.substring(0, 20));
-
       if (authContext.accessToken) {
         config.headers.Authorization = `Bearer ${authContext.accessToken}`;
-        console.log('[Interceptor] ✅ Authorization header added');
-      } else {
-        console.log('[Interceptor] ❌ No token - skipping Authorization header');
       }
 
       return config;
