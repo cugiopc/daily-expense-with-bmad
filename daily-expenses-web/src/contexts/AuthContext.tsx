@@ -40,6 +40,10 @@ interface AuthContextType {
   setAccessToken: (token: string | null) => void;
   /** Derived boolean: true if accessToken is present and valid. */
   isAuthenticated: boolean;
+  /** True while attempting to restore session from refresh token on app init. */
+  isLoading: boolean;
+  /** Updates loading state. Used by useAuthInit hook. */
+  setIsLoading: (loading: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -62,10 +66,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // See module-level JSDoc for detailed security rationale
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  // Loading state tracks session restoration on app init
+  // True from app mount until refresh attempt completes (success or failure)
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const value: AuthContextType = {
     accessToken,
     setAccessToken,
     isAuthenticated: !!accessToken,
+    isLoading,
+    setIsLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
