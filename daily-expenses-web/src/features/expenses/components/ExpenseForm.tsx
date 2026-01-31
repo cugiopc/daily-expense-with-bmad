@@ -233,29 +233,43 @@ export function ExpenseForm({
       <Controller
         name="amount"
         control={control}
-        render={({ field: { onChange, value, ...field } }) => (
-          <TextField
-            {...field}
-            value={value ?? ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              onChange(val === '' ? undefined : parseFloat(val));
-            }}
-            label="Số tiền"
-            type="number"
-            autoFocus // 🎯 CRITICAL: Auto-focus for 5-7 second entry goal
-            inputProps={{
-              min: 0.01,
-              step: 0.01,
-              inputMode: 'decimal', // Mobile keyboard optimization (numeric with decimal)
-            }}
-            error={!!errors.amount}
-            helperText={errors.amount?.message}
-            fullWidth
-            required
-            placeholder="vd: 50000"
-          />
-        )}
+        render={({ field: { onChange, value, ...field } }) => {
+          // Format number with thousand separators (1,000,000)
+          const formatWithCommas = (num: number | undefined): string => {
+            if (num === undefined || isNaN(num)) return '';
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+          };
+
+          // Remove commas and parse to number
+          const parseFromFormatted = (str: string): number | undefined => {
+            const cleaned = str.replace(/,/g, '');
+            if (cleaned === '') return undefined;
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? undefined : parsed;
+          };
+
+          return (
+            <TextField
+              {...field}
+              value={formatWithCommas(value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                onChange(parseFromFormatted(val));
+              }}
+              label="Số tiền"
+              type="text" // Changed from "number" to support comma formatting
+              autoFocus // 🎯 CRITICAL: Auto-focus for 5-7 second entry goal
+              inputProps={{
+                inputMode: 'decimal', // Mobile keyboard optimization (numeric with decimal)
+              }}
+              error={!!errors.amount}
+              helperText={errors.amount?.message}
+              fullWidth
+              required
+              placeholder="vd: 50,000"
+            />
+          );
+        }}
       />
 
       {/* Note Field - Optional, Enter key submits */}
