@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { useSwipeable } from 'react-swipeable';
 import { Expense } from '../types';
 import { useExpensesGroupedByDay } from '../hooks/useExpensesGroupedByDay';
@@ -11,6 +11,78 @@ import './ExpenseListGrouped.css';
 interface ExpenseListGroupedProps {
   expenses: Expense[] | undefined;
 }
+
+interface ExpenseItemProps {
+  expense: Expense;
+  isSwiped: boolean;
+  onSwipedLeft: (id: string) => void;
+  onSwipedRight: () => void;
+  onExpenseClick: (expense: Expense) => void;
+  onDeleteTap: (e: React.MouseEvent, id: string) => void;
+}
+
+/**
+ * Individual expense item with swipe handlers
+ * Extracted to separate component to properly use hooks per item
+ */
+const ExpenseItem = memo(({
+  expense,
+  isSwiped,
+  onSwipedLeft,
+  onSwipedRight,
+  onExpenseClick,
+  onDeleteTap
+}: ExpenseItemProps) => {
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => onSwipedLeft(expense.id),
+    onSwipedRight: () => onSwipedRight(),
+    trackMouse: true,
+    delta: 50,
+    preventScrollOnSwipe: true,
+  });
+
+  return (
+    <li
+      {...swipeHandlers}
+      data-expense-id={expense.id}
+      className={`expense-item ${isSwiped ? 'swiped' : ''}`}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onExpenseClick(expense);
+        }
+      }}
+    >
+      <div
+        className="expense-content"
+        onClick={() => onExpenseClick(expense)}
+      >
+        <div className="expense-item-main">
+          <time className="expense-time">{formatTime(expense.createdAt)}</time>
+          <span className="expense-note">
+            {expense.note}
+            {expense.pending_sync && (
+              <span className="pending-badge" title="Đang chờ đồng bộ">
+                ⏳
+              </span>
+            )}
+          </span>
+        </div>
+        <span className="expense-amount">{formatCurrency(expense.amount)}</span>
+      </div>
+
+      {/* Delete button (revealed on swipe) */}
+      <button
+        className="delete-button"
+        onClick={(e) => onDeleteTap(e, expense.id)}
+        aria-label="Xóa chi tiêu"
+      >
+        Xóa
+      </button>
+    </li>
+  );
+});
 
 /**
  * Displays expenses grouped by day with date headers and daily totals
@@ -96,17 +168,14 @@ export default function ExpenseListGrouped({ expenses }: ExpenseListGroupedProps
     return () => document.removeEventListener('click', handleClickOutside);
   }, [swipedExpenseId]);
 
-  // Create base swipe handlers - called once at component level
-  const baseSwipeHandlers = useSwipeable({
-    onSwipedLeft: (event) => {
-      const expenseId = (event.event.currentTarget as HTMLElement).closest('.expense-item')?.getAttribute('data-expense-id');
-      if (expenseId) setSwipedExpenseId(expenseId);
-    },
-    onSwipedRight: () => setSwipedExpenseId(null),
-    trackMouse: true, // Allow mouse swipe for desktop testing
-    delta: 50, // Minimum swipe distance in pixels
-    preventScrollOnSwipe: true,
-  });
+  // Swipe handler callbacks
+  const handleSwipedLeft = useCallback((expenseId: string) => {
+    setSwipedExpenseId(expenseId);
+  }, []);
+
+  const handleSwipedRight = useCallback(() => {
+    setSwipedExpenseId(null);
+  }, []);
 
   // Find expense for delete dialog
   const expenseToDelete = confirmDeleteId
@@ -129,52 +198,17 @@ export default function ExpenseListGrouped({ expenses }: ExpenseListGroupedProps
 
           {/* Expense List */}
           <ul className="expense-list" role="list">
-            {group.expenses.map((expense) => {
-              const isSwiped = swipedExpenseId === expense.id;
-
-              return (
-                <li
-                  key={expense.id}
-                  {...baseSwipeHandlers}
-                  data-expense-id={expense.id}
-                  className={`expense-item ${isSwiped ? 'swiped' : ''}`}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleExpenseClick(expense);
-                    }
-                  }}
-                >
-                  <div
-                    className="expense-content"
-                    onClick={() => handleExpenseClick(expense)}
-                  >
-                    <div className="expense-item-main">
-                      <time className="expense-time">{formatTime(expense.createdAt)}</time>
-                      <span className="expense-note">
-                        {expense.note}
-                        {expense.pending_sync && (
-                          <span className="pending-badge" title="Đang chờ đồng bộ">
-                            ⏳
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <span className="expense-amount">{formatCurrency(expense.amount)}</span>
-                  </div>
-
-                  {/* Delete button (revealed on swipe) */}
-                  <button
-                    className="delete-button"
-                    onClick={(e) => handleDeleteTap(e, expense.id)}
-                    aria-label="Xóa chi tiêu"
-                  >
-                    Xóa
-                  </button>
-                </li>
-              );
-            })}
+            {group.expenses.map((expense) => (
+              <ExpenseItem
+                key={expense.id}
+                expense={expense}
+                isSwiped={swipedExpenseId === expense.id}
+                onSwipedLeft={handleSwipedLeft}
+                onSwipedRight={handleSwipedRight}
+                onExpenseClick={handleExpenseClick}
+                onDeleteTap={handleDeleteTap}
+              />
+            ))}
           </ul>
         </section>
       ))}
